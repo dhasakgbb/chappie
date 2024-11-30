@@ -1,0 +1,51 @@
+2024-11-29 14:24:05,740 - INFO - User input for stock ticker: SPY
+2024-11-29 14:24:05,740 - INFO - Validated stock ticker: SPY
+2024-11-29 14:24:05,740 - INFO - Setting up data directory.
+2024-11-29 14:24:05,740 - INFO - Created directory for ticker 'SPY': D:\Chappie\data\SPY
+2024-11-29 14:24:05,740 - INFO - Data directory set up at: D:\Chappie\data\SPY
+2024-11-29 14:24:05,742 - INFO - Fetching stock performance data.
+2024-11-29 14:24:05,742 - INFO - Fetching data for ticker: SPY, period: 1mo
+2024-11-29 14:24:07,213 - INFO - Data fetched successfully for ticker: SPY
+2024-11-29 14:24:07,213 - INFO - Stock data fetched successfully.
+2024-11-29 14:24:07,222 - INFO - Saving stock data to file.
+2024-11-29 14:24:07,224 - INFO - Stock data saved to D:\Chappie\data\SPY\SPY_291124.csv
+2024-11-29 14:24:07,224 - INFO - Stock data saved to: D:\Chappie\data\SPY\SPY_291124.csv
+2024-11-29 14:34:32,511 - INFO - User input for stock ticker: AAPL
+2024-11-29 14:34:32,511 - INFO - Validated stock ticker: AAPL
+2024-11-29 14:34:32,512 - INFO - Setting up data directory.
+2024-11-29 14:34:32,512 - INFO - Created directory for ticker 'AAPL': D:\Chappie\data\AAPL
+2024-11-29 14:34:32,512 - INFO - Data directory set up at: D:\Chappie\data\AAPL
+2024-11-29 14:34:32,512 - INFO - Fetching stock performance data.
+2024-11-29 14:34:32,512 - INFO - Starting data fetch for ticker: AAPL with period: 1mo
+2024-11-29 14:34:32,911 - INFO - Successfully fetched data for ticker: AAPL
+2024-11-29 14:34:32,911 - INFO - Stock data fetched successfully.
+2024-11-29 14:34:32,917 - INFO - Saving stock data to file.
+2024-11-29 14:34:32,920 - INFO - Stock data saved to D:\Chappie\data\AAPL\AAPL_291124.csv
+2024-11-29 14:34:32,920 - INFO - Stock data saved to: D:\Chappie\data\AAPL\AAPL_291124.csv
+2024-11-29 14:44:04,522 - INFO - chappie_logger - User input for stock ticker: AAPL
+2024-11-29 14:44:04,522 - INFO - chappie_logger - Validated stock ticker: AAPL
+2024-11-29 14:44:04,522 - INFO - chappie_logger - Setting up data directory.
+2024-11-29 14:44:04,522 - INFO - chappie_logger - Directory for ticker 'AAPL' already exists: D:\Chappie\data\AAPL
+2024-11-29 14:44:04,522 - INFO - chappie_logger - Data directory set up at: D:\Chappie\data\AAPL
+2024-11-29 14:44:04,522 - INFO - chappie_logger - Fetching stock performance data.
+2024-11-29 14:44:05,904 - INFO - chappie_logger - Stock data fetched successfully.
+2024-11-29 14:44:05,908 - INFO - chappie_logger - Saving stock data to file.
+2024-11-29 14:44:05,913 - INFO - chappie_logger - Stock data saved to: D:\Chappie\data\AAPL\AAPL_291124.csv
+2024-11-29 14:48:52,769 - INFO - chappie_logger - User input for stock ticker: AAPL
+2024-11-29 14:48:52,774 - INFO - chappie_logger - Validated stock ticker: AAPL
+2024-11-29 14:48:52,774 - INFO - chappie_logger - Setting up data directory.
+2024-11-29 14:48:52,774 - INFO - chappie_logger - Directory for ticker 'AAPL' already exists: D:\Chappie\data\AAPL
+2024-11-29 14:48:52,774 - INFO - chappie_logger - Data directory set up at: D:\Chappie\data\AAPL
+2024-11-29 14:48:52,774 - INFO - chappie_logger - Fetching six months of stock performance data.
+2024-11-29 14:48:53,151 - INFO - chappie_logger - Stock data fetched successfully.
+2024-11-29 14:48:53,157 - INFO - chappie_logger - Saving stock data to file.
+2024-11-29 14:48:53,160 - INFO - chappie_logger - Stock data saved to: D:\Chappie\data\AAPL\AAPL_291124.csv
+2024-11-29 15:44:57,743 - INFO - chappie_logger - User input for stock ticker: AAPL
+2024-11-29 15:44:57,743 - INFO - chappie_logger - Validated stock ticker: AAPL
+2024-11-29 15:44:57,744 - INFO - chappie_logger - Setting up data directory.
+2024-11-29 15:44:57,744 - INFO - chappie_logger - Directory for ticker 'AAPL' already exists: D:\Chappie\data\AAPL
+2024-11-29 15:44:57,745 - INFO - chappie_logger - Data directory set up at: D:\Chappie\data\AAPL
+2024-11-29 15:44:57,745 - INFO - chappie_logger - Fetching six months of stock performance data.
+2024-11-29 15:44:59,112 - INFO - chappie_logger - Stock data fetched successfully.
+2024-11-29 15:44:59,112 - INFO - chappie_logger - Saving stock data to file.
+2024-11-29 15:44:59,128 - INFO - chappie_logger - Stock data saved to: D:\Chappie\data\AAPL\AAPL_291124.csv

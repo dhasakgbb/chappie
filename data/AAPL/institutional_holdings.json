@@ -1,0 +1,88 @@
+{
+    "major_holders": [
+        {
+            "Value": 0.02056
+        },
+        {
+            "Value": 0.61923003
+        },
+        {
+            "Value": 0.63223
+        },
+        {
+            "Value": 6480.0
+        }
+    ],
+    "institutional_holders": [
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Vanguard Group Inc",
+            "pctHeld": 0.0834,
+            "Shares": 1303688506,
+            "Value": 252876459508
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Blackrock Inc.",
+            "pctHeld": 0.0665,
+            "Shares": 1039640859,
+            "Value": 201659137420
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Berkshire Hathaway, Inc",
+            "pctHeld": 0.0586,
+            "Shares": 915560382,
+            "Value": 177591247296
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "State Street Corporation",
+            "pctHeld": 0.037,
+            "Shares": 578897858,
+            "Value": 112288817516
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "FMR, LLC",
+            "pctHeld": 0.0196,
+            "Shares": 307066638,
+            "Value": 59561715772
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Geode Capital Management, LLC",
+            "pctHeld": 0.0186,
+            "Shares": 291538165,
+            "Value": 56549657865
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Price (T.Rowe) Associates Inc",
+            "pctHeld": 0.0145000005,
+            "Shares": 226650943,
+            "Value": 43963483413
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Morgan Stanley",
+            "pctHeld": 0.013099999,
+            "Shares": 204714950,
+            "Value": 39708558851
+        },
+        {
+            "Date Reported": "2022-12-31T00:00:00",
+            "Holder": "Norges Bank Investment Management",
+            "pctHeld": 0.0107,
+            "Shares": 167374278,
+            "Value": 21746939940
+        },
+        {
+            "Date Reported": "2023-06-30T00:00:00",
+            "Holder": "Northern Trust Corporation",
+            "pctHeld": 0.0105,
+            "Shares": 164536073,
+            "Value": 31915062079
+        }
+    ]
+}

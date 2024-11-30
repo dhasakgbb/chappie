@@ -1,0 +1,10 @@
+pandas
+yfinance
+matplotlib
+tqdm
+colorama
+dask[complete]
+aiohttp
+tenacity
+concurrent.futures
+fredapi

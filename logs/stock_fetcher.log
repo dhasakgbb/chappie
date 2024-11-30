@@ -1,0 +1,6 @@
+2024-11-29 14:44:04,522 - INFO - stock_fetcher_logger - Starting data fetch for ticker: AAPL with period: 1mo
+2024-11-29 14:44:05,904 - INFO - stock_fetcher_logger - Successfully fetched data for ticker: AAPL
+2024-11-29 14:48:52,774 - INFO - stock_fetcher_logger - Starting data fetch for ticker: AAPL with period: 6mo
+2024-11-29 14:48:53,151 - INFO - stock_fetcher_logger - Successfully fetched data for ticker: AAPL
+2024-11-29 15:44:57,745 - INFO - stock_fetcher_logger - Starting data fetch for ticker: AAPL with period: 6mo
+2024-11-29 15:44:59,112 - INFO - stock_fetcher_logger - Successfully fetched data for ticker: AAPL
