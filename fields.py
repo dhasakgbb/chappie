@@ -8,7 +8,7 @@ jax.config.update('jax_platform_name', 'cpu')
 
 class FieldConfigurationSpace:
     """
-    Defines a space of field configurations (M) using QuTiP Qobjs and JAX arrays.
+    Defines a space of field configurations (M) using JAX arrays primarily.
     Each configuration consists of a type 'g_type' and a state vector 'phi'.
     
     'g_type' is currently an integer (0 or 1) serving as a placeholder for richer 
@@ -39,18 +39,15 @@ class FieldConfigurationSpace:
         self.phi_seed = phi_seed
 
         if phi_subsystem_dims_override is None:
-            # Default dims for a ket state: [[dimension], [1]]
-            self.phi_subsystem_dims = [[dimension], [1]]
-            print(f"""Warning: phi_subsystem_dims_override not provided to FieldConfigurationSpace. 
-                  Defaulting phi_qobj dims to {self.phi_subsystem_dims}. 
-                  Ensure this is compatible with UniverseState and T-operator expectations.""")
+            raise ValueError(
+                "phi_subsystem_dims_override must be provided to FieldConfigurationSpace. "
+                "It is crucial for ensuring compatibility with UniverseState and symmetry operators. "
+                "Example: [[dim1, dim2], [1, 1]] for a ket state."
+            )
         else:
-            # Ensure the override is formatted correctly for a ket.
-            # It might come in as [d1, d2, ...] or already as [[d1, d2, ...], [1, 1, ...]]
             if isinstance(phi_subsystem_dims_override, list) and \
                len(phi_subsystem_dims_override) > 0:
                 if isinstance(phi_subsystem_dims_override[0], int):
-                    # Input is like [d1, d2, ...], convert to [[d1, d2, ...], [1, 1, ...]]
                     actual_dims_list = phi_subsystem_dims_override
                     self.phi_subsystem_dims = [actual_dims_list, [1] * len(actual_dims_list)]
                 elif isinstance(phi_subsystem_dims_override[0], list) and \
@@ -59,7 +56,6 @@ class FieldConfigurationSpace:
                      all(isinstance(d, int) for d in phi_subsystem_dims_override[0]) and \
                      all(d == 1 for d in phi_subsystem_dims_override[1]) and \
                      len(phi_subsystem_dims_override[0]) == len(phi_subsystem_dims_override[1]):
-                    # Input is already correctly formatted like [[d1, d2], [1, 1]]
                     self.phi_subsystem_dims = phi_subsystem_dims_override
                 else:
                     raise ValueError(
@@ -71,46 +67,56 @@ class FieldConfigurationSpace:
                     f"phi_subsystem_dims_override must be a list, got: {phi_subsystem_dims_override}"
                 )
 
-            # Validate that product of dims matches the overall dimension
             if np.prod(self.phi_subsystem_dims[0]) != self.dimension:
                 raise ValueError(
                     f"Product of subsystem dimensions {self.phi_subsystem_dims[0]} ({np.prod(self.phi_subsystem_dims[0])}) "
                     f"must equal the total dimension {self.dimension}."
                 )
         
-        self.configurations = []
+        # Batched JAX arrays
+        self.g_types_jax: jnp.ndarray = None
+        self.phi_vectors_jax: jnp.ndarray = None
+        
+        # Optional list of Qobj for compatibility or non-JAX parts (if any)
+        # self.phi_qobj_list: list[Qobj] = None 
+
         self._sample_configurations(self.num_configs, self.phi_seed)
 
-    def _generate_single_config(self) -> dict:
-        """
-        Generates a single configuration {g_type, phi_jax, phi_qobj}.
-        g_type is sampled as 0 or 1.
-        phi is a normalized random complex vector.
-        """
-        g_type = np.random.randint(0, 2) # g_type is 0 or 1, mapping to S[0] or S[1] in complexity.py
-        
-        # Generate complex vector components for phi
-        phi_real = np.random.randn(self.dimension)
-        phi_imag = np.random.randn(self.dimension)
-        phi_numpy_unnormalized = phi_real + 1j * phi_imag
-        norm = np.linalg.norm(phi_numpy_unnormalized)
-        phi_numpy = phi_numpy_unnormalized / norm if norm != 0 else phi_numpy_unnormalized
-
-        phi_jax = jnp.array(phi_numpy)
-        phi_qobj = Qobj(phi_numpy, dims=self.phi_subsystem_dims) # Removed type='ket'
-        
-        return {'g_type': g_type, 'phi_jax': phi_jax, 'phi_qobj': phi_qobj}
-
     def _sample_configurations(self, num_samples: int, seed_offset: int = 0):
-        """Samples 'num_samples' configurations and stores them."""
+        """Samples 'num_samples' configurations and stores them as batched JAX arrays."""
         if self.phi_seed is not None:
+            # Use a JAX key for JAX random functions if we switch to them
+            # For NumPy, seed normally.
             np.random.seed(self.phi_seed + (seed_offset if seed_offset is not None else 0))
         
-        self.configurations = [self._generate_single_config() for _ in range(num_samples)]
+        # Generate g_types (0 or 1)
+        g_types_np = np.random.randint(0, 2, size=num_samples)
+        self.g_types_jax = jnp.array(g_types_np)
+        
+        # Generate complex vectors for phi
+        phi_real_np = np.random.randn(num_samples, self.dimension)
+        phi_imag_np = np.random.randn(num_samples, self.dimension)
+        phi_numpy_unnormalized = phi_real_np + 1j * phi_imag_np
+        
+        # Normalize each vector (row-wise)
+        norms = np.linalg.norm(phi_numpy_unnormalized, axis=1, keepdims=True)
+        # Avoid division by zero for zero-norm vectors (though unlikely with randn)
+        norms[norms == 0] = 1.0 
+        phi_numpy_normalized = phi_numpy_unnormalized / norms
+        
+        self.phi_vectors_jax = jnp.array(phi_numpy_normalized)
 
-    def get_configurations(self) -> list[dict]:
-        """Returns the list of all sampled configurations."""
-        return self.configurations
+        # If Qobj list is needed:
+        # self.phi_qobj_list = [Qobj(phi_numpy_normalized[i], dims=self.phi_subsystem_dims) for i in range(num_samples)]
+
+    def get_jax_configurations(self) -> dict:
+        """Returns the batched JAX configurations and necessary dimension info."""
+        return {
+            'g_types_jax': self.g_types_jax, 
+            'phi_vectors_jax': self.phi_vectors_jax,
+            'phi_dimension': self.dimension,
+            'phi_subsystem_dims': self.phi_subsystem_dims # For S_g operator construction
+        }
 
     def resample_configurations(self, num_configs: int = None, phi_seed: int = None, 
                                 phi_subsystem_dims_override: list[list[int]] = None):
@@ -125,16 +131,38 @@ class FieldConfigurationSpace:
         """
         if num_configs is not None:
             self.num_configs = num_configs
-        if phi_seed is not None: # Allow explicitly setting a new seed or removing it
+        if phi_seed is not None: 
             self.phi_seed = phi_seed 
-        elif phi_seed is None and self.phi_seed is not None: # If new seed is None, but old one was set, increment old one if not explicitly None
-             self.phi_seed += 1 # Increment seed to get new samples if not overridden
+        elif phi_seed is None and self.phi_seed is not None:
+             self.phi_seed += 1
 
         if phi_subsystem_dims_override is not None:
-            self.phi_subsystem_dims = phi_subsystem_dims_override
+            # Re-validate if dims override changes
+            if isinstance(phi_subsystem_dims_override, list) and \
+               len(phi_subsystem_dims_override) > 0:
+                if isinstance(phi_subsystem_dims_override[0], int):
+                    actual_dims_list = phi_subsystem_dims_override
+                    self.phi_subsystem_dims = [actual_dims_list, [1] * len(actual_dims_list)]
+                elif isinstance(phi_subsystem_dims_override[0], list) and \
+                     len(phi_subsystem_dims_override) == 2 and \
+                     isinstance(phi_subsystem_dims_override[1], list) and \
+                     all(isinstance(d, int) for d in phi_subsystem_dims_override[0]) and \
+                     all(d == 1 for d in phi_subsystem_dims_override[1]) and \
+                     len(phi_subsystem_dims_override[0]) == len(phi_subsystem_dims_override[1]):
+                    self.phi_subsystem_dims = phi_subsystem_dims_override
+                else:
+                    raise ValueError(f"Invalid format for resample phi_subsystem_dims_override: {phi_subsystem_dims_override}.")
+            else:
+                raise ValueError(f"Resample phi_subsystem_dims_override must be a list, got: {phi_subsystem_dims_override}")
+
+            if np.prod(self.phi_subsystem_dims[0]) != self.dimension:
+                 raise ValueError(
+                    f"Product of subsystem dimensions {self.phi_subsystem_dims[0]} for resample "
+                    f"must equal the total dimension {self.dimension}."
+                )
         
         print(f"Resampling Field Configurations: num_configs={self.num_configs}, new_seed_base={self.phi_seed}")
-        self._sample_configurations(self.num_configs, seed_offset=0) # Seed already incorporates changes
+        self._sample_configurations(self.num_configs, seed_offset=0)
 
 # Example usage:
 if __name__ == '__main__':
@@ -153,16 +181,16 @@ if __name__ == '__main__':
                                           phi_seed=42,
                                           phi_subsystem_dims_override=example_phi_qobj_dims)
     
-    configurations = field_space.get_configurations()
-    print(f"\nGenerated {len(configurations)} configurations.")
-    for i, config in enumerate(configurations[:3]): # Print first 3
-        print(f"Config {i}: g_type = {config['g_type']}, "
-              f"phi_qobj norm = {config['phi_qobj'].norm():.4f}, "
-              f"phi_qobj dims = {config['phi_qobj'].dims}, "
-              f"phi_jax shape = {config['phi_jax'].shape}")
+    jax_configs = field_space.get_jax_configurations()
+    print(f"\nGenerated JAX configurations:")
+    print(f"  g_types_jax shape: {jax_configs['g_types_jax'].shape}")
+    print(f"  phi_vectors_jax shape: {jax_configs['phi_vectors_jax'].shape}")
+    print(f"  phi_dimension: {jax_configs['phi_dimension']}")
+    print(f"  phi_subsystem_dims: {jax_configs['phi_subsystem_dims']}")
+    print(f"  Example g_type[0]: {jax_configs['g_types_jax'][0]}")
+    print(f"  Example phi_vector[0] norm: {jnp.linalg.norm(jax_configs['phi_vectors_jax'][0]):.4f}")
 
-    field_space.resample_configurations(num_configs=5, phi_seed=43) # Seed will be 43
-    configurations_resampled = field_space.get_configurations()
-    print(f"\nResampled to {len(configurations_resampled)} configurations.")
-    for i, config in enumerate(configurations_resampled[:2]): # Print first 2 of resampled
-        print(f"Config {i}: g_type = {config['g_type']}, phi_qobj norm = {config['phi_qobj'].norm():.4f}") 
+    field_space.resample_configurations(num_configs=5, phi_seed=43)
+    jax_configs_resampled = field_space.get_jax_configurations()
+    print(f"\nResampled to {jax_configs_resampled['g_types_jax'].shape[0]} configurations.")
+    print(f"  Example g_type[0] after resample: {jax_configs_resampled['g_types_jax'][0]}") 

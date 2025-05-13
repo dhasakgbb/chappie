@@ -154,6 +154,9 @@ class IntegratedInformationCalculator:
     Minimal Toolkit: PyPhi (true MIP search).
     """
 
+    def __init__(self):
+        self._network_cache = {} # Cache for PyPhi Network objects based on internal_dims
+
     def _prepare_pyphi_inputs_from_rhoS(self, rho_S: qutip.Qobj, 
                                           internal_dims: list[int]) -> tuple[np.ndarray, tuple[int,...], tuple[int,...]]:
         """
@@ -219,11 +222,14 @@ class IntegratedInformationCalculator:
             full_tpm = tpm_single_node
             for _ in range(1, num_elements):
                 full_tpm = np.kron(full_tpm, tpm_single_node) 
-        else: 
-            print(f"PyPhi placeholder cannot generate TPM for internal_dims: {internal_dims}. Using identity TPM.")
-            full_tpm = np.eye(system_dim) if system_dim > 0 else np.array([[]])
-            if system_dim > 0: # Avoid division by zero if system_dim is 0
-                 full_tpm = full_tpm / system_dim 
+        elif system_dim > 0: # For non-binary or mixed systems, or if num_elements is 0 but system_dim > 0 (e.g. single non-binary element)
+            print(f"PyPhi placeholder: Using a uniform stochastic TPM for internal_dims: {internal_dims}.")
+            # Uniformly stochastic TPM: every state can transition to every other state with equal probability.
+            full_tpm = np.ones((system_dim, system_dim)) / system_dim
+        else: # system_dim is 0 (e.g. no elements)
+            print(f"PyPhi placeholder: Cannot generate TPM for zero-dimension system. Using empty TPM.")
+            full_tpm = np.array([[]])
+            # PyPhi will likely not be called or will error out with an empty TPM / no nodes.
 
         # State probabilities from rho_S diagonal
         state_probs_from_rho = rho_S.diag().real if rho_S.isoper else np.array([]) # Ensure it's an operator
@@ -255,10 +261,12 @@ class IntegratedInformationCalculator:
     def compute_phi(self, subsystem: Subsystem, use_mip_search: bool = True) -> float:
         """
         Computes integrated information Φ for the given subsystem.
+        Caches PyPhi Network based on subsystem internal_dims.
         """
         print(f"\nAttempting to compute Φ for subsystem (internal_dims: {subsystem.get_internal_dims()})...")
         rho_S_qobj = subsystem.get_density_matrix()
         internal_dims = subsystem.get_internal_dims()
+        internal_dims_tuple = tuple(internal_dims) # Use tuple for cache key
         
         if subsystem.dimension == 0:
             print("Cannot compute Phi: Subsystem has zero dimension.")
@@ -268,47 +276,30 @@ class IntegratedInformationCalculator:
             print(f"Cannot compute Phi: rho_S is not an operator (type: {rho_S_qobj.type}, shape: {rho_S_qobj.shape}).")
             return 0.0
 
-
         try:
-            tpm, current_state, node_labels = self._prepare_pyphi_inputs_from_rhoS(rho_S_qobj, internal_dims)
-            
-            if tpm.size == 0 or not node_labels: # Check if tpm is empty or no nodes
-                # Check if it's because internal_dims was empty or led to num_elements == 0
-                if not internal_dims or subsystem.num_elements == 0:
-                     print("Cannot compute Phi: Subsystem has no internal elements defined.")
-                else:
-                     print("Cannot compute Phi: Invalid PyPhi inputs (e.g., empty TPM or no nodes derived from non-empty subsystem).")
-                return 0.0
+            # Try to get network, tpm, and node_labels from cache
+            if internal_dims_tuple in self._network_cache:
+                network, tpm, node_labels = self._network_cache[internal_dims_tuple]
+                # Need to re-calculate current_state from the new rho_S
+                _, current_state, _ = self._prepare_pyphi_inputs_from_rhoS(rho_S_qobj, internal_dims)
+                print(f"  Using cached PyPhi Network for dims {internal_dims_tuple}.")
+            else:
+                tpm, current_state, node_labels = self._prepare_pyphi_inputs_from_rhoS(rho_S_qobj, internal_dims)
+                
+                if tpm.size == 0 or not node_labels:
+                    if not internal_dims or subsystem.num_elements == 0:
+                        print("Cannot compute Phi: Subsystem has no internal elements defined.")
+                    else:
+                        print("Cannot compute Phi: Invalid PyPhi inputs (e.g., empty TPM or no nodes derived from non-empty subsystem).")
+                    return 0.0
+                
+                network = pyphi.Network(tpm, node_labels=node_labels)
+                self._network_cache[internal_dims_tuple] = (network, tpm, node_labels)
+                print(f"  Created and cached PyPhi Network for dims {internal_dims_tuple}.")
 
             print(f"  Prepared TPM shape: {tpm.shape}, Current state: {current_state}, Node labels: {node_labels}")
             
-            # Ensure current_state is compatible with TPM
-            expected_state_len = int(round(np.log2(tpm.shape[1]))) if tpm.ndim == 2 and tpm.shape[0] == tpm.shape[1] and tpm.shape[1] > 0 else 0
-            if len(current_state) != expected_state_len and all(d == 2 for d in internal_dims):
-                print(f"Warning: Current state length {len(current_state)} mismatch with TPM expected length {expected_state_len}. Adjusting state or check TPM generation.")
-                # This can happen if current_state_tuple was (idx,) for non-binary.
-                # For binary, if num_elements doesn't match log2(tpm_dim), it's an issue.
-                # If PyPhi handles single element tuple state for non-binary correctly, this might be okay.
-
-            network = pyphi.Network(tpm, node_labels=node_labels)
-            # Validate that subsystem state is valid for the network
-            # The following block is removed as network.is_valid_state is not an existing method.
-            # PyPhi will raise its own errors if the state is problematic.
-            # if not network.is_valid_state(current_state):
-            #     print(f"Error: Current state {current_state} is not valid for the PyPhi network (nodes: {node_labels}). Defaulting Phi to 0.")
-            #     # Attempt to use a default valid state if possible, or return 0
-            #     if network.num_nodes > 0: # Try to create a default state if nodes exist
-            #         default_state = tuple([0] * network.num_nodes)
-            #         if network.is_valid_state(default_state):
-            #             print(f"  Using default state {default_state} instead.")
-            #             current_state = default_state
-            #         else: # Still invalid
-            #             return 0.0
-            #     else: # No nodes
-            #         return 0.0
-
             pyphi_subsystem = pyphi.Subsystem(network, current_state)
-
 
             if use_mip_search:
                 print(f"  Computing Φ_MIP for subsystem {node_labels} in state {current_state}...")
