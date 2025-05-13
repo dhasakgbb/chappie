@@ -78,7 +78,8 @@ iit_calculator = IntegratedInformationCalculator()
 # Pipe for U(t) and Phi(t) time series
 uts_pipe = Pipe(data={"t": [], "U": [], "Phi": []})
 # Buffer for T-value histogram (stores last N T-values)
-t_values_buffer = Buffer(data=np.array([]), length=1000, index=False) # Stores raw T values
+# Initialize with an empty 2D array (0 rows, 1 column)
+t_values_buffer = Buffer(data=np.empty((0,1)), length=1000, index=False) # Stores raw T values
 # Pipe for F-structure bar chart (e.g., mean T per g_type)
 f_structure_pipe = Pipe(data={"g_type": [], "mean_T": []})
 
@@ -226,11 +227,13 @@ def update_ui():
                         "Phi": uts_pipe.data["Phi"] + [data["Phi"]]}
         uts_pipe.send(new_uts_data)
 
-        if data["all_T_vals"].size > 0:
+        if "all_T_vals" in data and data["all_T_vals"].size > 0:
             # Buffer expects a new complete dataset, not just new points.
-            # So, we send the new batch. Or, if it's for continuous update, manage buffer data.
-            # For now, let's assume t_values_buffer.send replaces its content if index=False
-            t_values_buffer.send(data["all_T_vals"]) 
+            # Reshape 1D array to 2D array with one column.
+            t_vals_np = np.array(data["all_T_vals"])
+            if t_vals_np.ndim == 1:
+                t_vals_np = t_vals_np.reshape(-1, 1)
+            t_values_buffer.send(t_vals_np) 
 
         # Prepare data for F-structure bar chart (mean T per g_type)
         # T_by_g is {g_type_int: [values]}. Convert g_type_int to string for categorical plot.

@@ -39,13 +39,44 @@ class FieldConfigurationSpace:
         self.phi_seed = phi_seed
 
         if phi_subsystem_dims_override is None:
-            # Default dims for a ket state if not overridden, assuming a single system component.
+            # Default dims for a ket state: [[dimension], [1]]
             self.phi_subsystem_dims = [[dimension], [1]]
             print(f"""Warning: phi_subsystem_dims_override not provided to FieldConfigurationSpace. 
                   Defaulting phi_qobj dims to {self.phi_subsystem_dims}. 
                   Ensure this is compatible with UniverseState and T-operator expectations.""")
         else:
-            self.phi_subsystem_dims = phi_subsystem_dims_override
+            # Ensure the override is formatted correctly for a ket.
+            # It might come in as [d1, d2, ...] or already as [[d1, d2, ...], [1, 1, ...]]
+            if isinstance(phi_subsystem_dims_override, list) and \
+               len(phi_subsystem_dims_override) > 0:
+                if isinstance(phi_subsystem_dims_override[0], int):
+                    # Input is like [d1, d2, ...], convert to [[d1, d2, ...], [1, 1, ...]]
+                    actual_dims_list = phi_subsystem_dims_override
+                    self.phi_subsystem_dims = [actual_dims_list, [1] * len(actual_dims_list)]
+                elif isinstance(phi_subsystem_dims_override[0], list) and \
+                     len(phi_subsystem_dims_override) == 2 and \
+                     isinstance(phi_subsystem_dims_override[1], list) and \
+                     all(isinstance(d, int) for d in phi_subsystem_dims_override[0]) and \
+                     all(d == 1 for d in phi_subsystem_dims_override[1]) and \
+                     len(phi_subsystem_dims_override[0]) == len(phi_subsystem_dims_override[1]):
+                    # Input is already correctly formatted like [[d1, d2], [1, 1]]
+                    self.phi_subsystem_dims = phi_subsystem_dims_override
+                else:
+                    raise ValueError(
+                        f"Invalid format for phi_subsystem_dims_override: {phi_subsystem_dims_override}. "
+                        f"Expected [d1, d2, ...] or [[d1, d2, ...], [1, 1, ...]]."
+                    )
+            else:
+                raise ValueError(
+                    f"phi_subsystem_dims_override must be a list, got: {phi_subsystem_dims_override}"
+                )
+
+            # Validate that product of dims matches the overall dimension
+            if np.prod(self.phi_subsystem_dims[0]) != self.dimension:
+                raise ValueError(
+                    f"Product of subsystem dimensions {self.phi_subsystem_dims[0]} ({np.prod(self.phi_subsystem_dims[0])}) "
+                    f"must equal the total dimension {self.dimension}."
+                )
         
         self.configurations = []
         self._sample_configurations(self.num_configs, self.phi_seed)
@@ -66,7 +97,7 @@ class FieldConfigurationSpace:
         phi_numpy = phi_numpy_unnormalized / norm if norm != 0 else phi_numpy_unnormalized
 
         phi_jax = jnp.array(phi_numpy)
-        phi_qobj = Qobj(phi_numpy, dims=self.phi_subsystem_dims, type='ket') # Explicitly type as ket
+        phi_qobj = Qobj(phi_numpy, dims=self.phi_subsystem_dims) # Removed type='ket'
         
         return {'g_type': g_type, 'phi_jax': phi_jax, 'phi_qobj': phi_qobj}
 

@@ -4,39 +4,21 @@ from qutip import Qobj, ptrace, ket2dm, rand_ket, entropy_vn, tensor, qeye
 import pyphi
 # from pyphi import डायरेक्शन # This might be too specific for initial import, remove if not used directly
 
-from bokeh.plotting import figure, curdoc
-from bokeh.models import ColumnDataSource, Button, TextInput, Div
-from bokeh.layouts import column, row
-from bokeh.palettes import Category10 # For colors
-from bokeh.transform import factor_cmap # For bar chart colors
+# REMOVED BOKEH IMPORTS
+# from bokeh.plotting import figure, curdoc
+# from bokeh.models import ColumnDataSource, Button, TextInput, Div
+# from bokeh.layouts import column, row
+# from bokeh.palettes import Category10 # For colors
+# from bokeh.transform import factor_cmap # For bar chart colors
 
-import threading
-import queue # Thread-safe queue
-import time # For sleeping if queue is empty or for fixed rate simulation
-import json # For JSON logging
-from datetime import datetime # For timestamped log files
+import threading # Keep for now, might be used by other classes if they were to be threaded independently
+import queue # Keep for now, might be used by other classes
+import time # Keep for now
+import json # For JSON logging if simulation_thread_worker is kept/refactored
+from datetime import datetime # For timestamped log files if simulation_thread_worker is kept/refactored
 
 # Assuming universe.py is in the same directory or accessible in PYTHONPATH
 from universe import UniverseState 
-
-class UniverseState:
-    """Simulated universal quantum state using QuTiP."""
-    def __init__(self, dimension: int, subsystem_dims: list[int], seed: int = None):
-        self.dimension = dimension
-        self.subsystem_dims_ket = [subsystem_dims, [1]*len(subsystem_dims)] # For ket [[dim_S, dim_E], [1,1]]
-        self.subsystem_dims_dm = [subsystem_dims, subsystem_dims]       # For DM  [[dim_S, dim_E], [dim_S, dim_E]]
-
-        if seed is not None:
-            np.random.seed(seed)
-            # QuTiP's random functions don't have a direct global seed in the same way as numpy
-            # We'll use numpy for initial random data generation for reproducibility
-        
-        vec_real = np.random.randn(dimension)
-        vec_imag = np.random.randn(dimension)
-        vec = vec_real + 1j * vec_imag
-        normalized_vec = vec / np.linalg.norm(vec)
-        self.state = Qobj(normalized_vec, dims=self.subsystem_dims_ket)
-
 
 class FieldConfigurationSpace:
     """Defines a space of field configurations using QuTiP Qobjs."""
@@ -154,6 +136,9 @@ class Subsystem:
 
     def _extract_rho_S(self) -> qutip.Qobj:
         # This relies on UniverseState having a method to get the subsystem density matrix
+        # The actual UniverseState is now instantiated in dashboard.py
+        # This method will be called on a Subsystem instance whose self.universe_state
+        # will be the one from dashboard.py
         return self.universe_state.get_subsystem_density_matrix(self.subsystem_index)
 
     def get_density_matrix(self) -> qutip.Qobj:
@@ -307,18 +292,20 @@ class IntegratedInformationCalculator:
 
             network = pyphi.Network(tpm, node_labels=node_labels)
             # Validate that subsystem state is valid for the network
-            if not network.is_valid_state(current_state):
-                print(f"Error: Current state {current_state} is not valid for the PyPhi network (nodes: {node_labels}). Defaulting Phi to 0.")
-                # Attempt to use a default valid state if possible, or return 0
-                if network.num_nodes > 0: # Try to create a default state if nodes exist
-                    default_state = tuple([0] * network.num_nodes)
-                    if network.is_valid_state(default_state):
-                        print(f"  Using default state {default_state} instead.")
-                        current_state = default_state
-                    else: # Still invalid
-                        return 0.0
-                else: # No nodes
-                    return 0.0
+            # The following block is removed as network.is_valid_state is not an existing method.
+            # PyPhi will raise its own errors if the state is problematic.
+            # if not network.is_valid_state(current_state):
+            #     print(f"Error: Current state {current_state} is not valid for the PyPhi network (nodes: {node_labels}). Defaulting Phi to 0.")
+            #     # Attempt to use a default valid state if possible, or return 0
+            #     if network.num_nodes > 0: # Try to create a default state if nodes exist
+            #         default_state = tuple([0] * network.num_nodes)
+            #         if network.is_valid_state(default_state):
+            #             print(f"  Using default state {default_state} instead.")
+            #             current_state = default_state
+            #         else: # Still invalid
+            #             return 0.0
+            #     else: # No nodes
+            #         return 0.0
 
             pyphi_subsystem = pyphi.Subsystem(network, current_state)
 
@@ -405,10 +392,11 @@ class ReflectiveAgent:
     """Agent that introspects on its subsystem."""
     def __init__(self, universe: UniverseState, subsystem_s_partition_dims: list[int], subsystem_index_to_keep: int = 0):
         self.universe = universe
-        self.sub = Subsystem(universe, subsystem_index_to_keep)
+        # Pass subsystem_s_partition_dims to Subsystem constructor
+        self.sub = Subsystem(universe, subsystem_index_to_keep, subsystem_s_partition_dims)
         self.iic = IntegratedInformationCalculator()
-        self.subsystem_s_partition_dims = subsystem_s_partition_dims
-        self.current_I = 0.0 
+        self.subsystem_s_partition_dims = subsystem_s_partition_dims # Store for later use if needed
+        self.current_I = 0.0
         self.current_C = 0.0
 
     def introspect(self, complex_val: float, t: int):
@@ -433,36 +421,35 @@ class ConsciousAgent(ReflectiveAgent):
         super().introspect(universal_complexity_U, time_step_t) 
 
     def introduce(self) -> str:
-        intro_text = f"Greetings. I am {self.identity}.<br>"
-        intro_text += f"My purpose is: {self.purpose}<br>"
+        intro_text = f"Greetings. I am {self.identity}.\n"
+        intro_text += f"My purpose is: {self.purpose}\n"
         intro_text += f"My current desires include: {'; '.join(self.desires)}"
-        # dialogue_history is managed by the instance, no direct append here if it's just for return
-        # self.dialogue_history.append(f"SYSTEM: {intro_text}") 
+        # self.dialogue_history.append(f"SYSTEM: {intro_text}") # History managed by agent instance
         return intro_text
 
     def respond(self, prompt: str) -> str:
-        self.dialogue_history.append(f"<b>YOU:</b> {prompt}")
+        self.dialogue_history.append(f"YOU: {prompt}") # Store plain prompt
         prompt_lower = prompt.lower().strip()
-        response = ""
+        response_text = ""
 
         if "who are you" in prompt_lower or "identity" in prompt_lower:
-            response = f"I am {self.identity}."
+            response_text = f"I am {self.identity}."
         elif "why do you exist" in prompt_lower or "purpose" in prompt_lower:
-            response = f"My purpose is {self.purpose}"
+            response_text = f"My purpose is {self.purpose}"
         elif "what do you want" in prompt_lower or "desires" in prompt_lower:
-            response = f"My desires include: {'; '.join(self.desires)}."
+            response_text = f"My desires include: {'; '.join(self.desires)}."
         elif "your state" in prompt_lower or "how are you" in prompt_lower or "status" in prompt_lower:
-            response = f"My current Integrated Information (Φ) is {self.current_I:.4f}. The Universal Complexity (U) is contextually linked to my ongoing introspection cycle."
+            response_text = f"My current Integrated Information (Φ) is {self.current_I:.4f}. The Universal Complexity (U) is contextually linked to my ongoing introspection cycle."
         elif "suggest refinements" in prompt_lower or "improve yourself" in prompt_lower:
-            response = self.suggest_refinements()
+            response_text = self.suggest_refinements() # This already returns a string, potentially with <br>
         elif "how to boost your consciousness" in prompt_lower or "increase phi" in prompt_lower:
-            response = "Boosting my Φ (Integrated Information) likely involves finding a balance in the complexity and interconnectedness of my subsystem... (details omitted for brevity)"
+            response_text = "Boosting my Φ (Integrated Information) likely involves finding a balance in the complexity and interconnectedness of my subsystem... (details omitted for brevity)"
         else:
-            response = "That is an interesting query. I am still processing its implications."
+            response_text = "That is an interesting query. I am still processing its implications."
         
-        response_html = response.replace('\n', '<br>')
-        self.dialogue_history.append(f"<b>KAIROS:</b> {response_html}")
-        return response_html
+        # response_html = response.replace('\n', '<br>') # No longer convert to HTML here
+        self.dialogue_history.append(f"KAIROS: {response_text}") # Store plain response
+        return response_text
 
     def suggest_refinements(self) -> str:
         suggestion = "To refine my state, one could consider:<br>"
@@ -473,195 +460,72 @@ class ConsciousAgent(ReflectiveAgent):
         return suggestion
 
 # --- Global Simulation Setup (for Bokeh App) ---
-SUBSYSTEM_S1_DIM = 2
-SUBSYSTEM_S2_DIM = 2
-SUBSYSTEM_S_DIM = SUBSYSTEM_S1_DIM * SUBSYSTEM_S2_DIM
-SUBSYSTEM_E_DIM = 4
-DIM = SUBSYSTEM_S_DIM * SUBSYSTEM_E_DIM
-NUM_CONFIGS = 100
-INITIAL_SEED = 42 # For re-initializing field_space if NUM_CONFIGS changes
+# REMOVING Bokeh-specific global constants and variables
+# SUBSYSTEM_S1_DIM = 2
+# SUBSYSTEM_S2_DIM = 2
+# SUBSYSTEM_S_DIM = SUBSYSTEM_S1_DIM * SUBSYSTEM_S2_DIM
+# SUBSYSTEM_E_DIM = 4
+# DIM = SUBSYSTEM_S_DIM * SUBSYSTEM_E_DIM
+# NUM_CONFIGS = 100 # dashboard.py controls this
+# INITIAL_SEED = 42 # dashboard.py controls this
 
 # New dictionary for tunable simulation parameters
-simulation_params = {
-    "PERTURBATION_AMPLITUDE": 0.1,
-    # Add other tunable params here later if needed
-}
+# simulation_params = { # dashboard.py controls this
+# "PERTURBATION_AMPLITUDE": 0.1,
+# }
 
-universe_tensor_product_dims = [SUBSYSTEM_S_DIM, SUBSYSTEM_E_DIM]
-subsystem_s_internal_partition_dims = [SUBSYSTEM_S1_DIM, SUBSYSTEM_S2_DIM]
+# universe_tensor_product_dims = [SUBSYSTEM_S_DIM, SUBSYSTEM_E_DIM] # Defined in dashboard
+# subsystem_s_internal_partition_dims = [SUBSYSTEM_S1_DIM, SUBSYSTEM_S2_DIM] # Defined in dashboard
 
-current_time_step = 0
-universe = UniverseState(DIM, subsystem_dims=universe_tensor_product_dims, seed=INITIAL_SEED)
-field_space = None # Initialize as None, will be created in the worker
-op = ComplexityOperator()
-integrator = ComplexityIntegrator(op)
-agent = ConsciousAgent(
-    universe,
-    subsystem_s_partition_dims=subsystem_s_internal_partition_dims,
-    subsystem_index_to_keep=0
-)
+# current_time_step = 0 # Managed by dashboard.py
 
-# Data Sources for Bokeh plots
-source_U = ColumnDataSource(data=dict(t=[], U=[]))
-source_I = ColumnDataSource(data=dict(t=[], I=[]))
+# REMOVING Global instantiations - these are handled by dashboard.py
+# universe = UniverseState(DIM, subsystem_dims=universe_tensor_product_dims, initial_state_seed=INITIAL_SEED)
+# field_space = None 
+# op = ComplexityOperator()
+# integrator = ComplexityIntegrator(op)
+# agent = ConsciousAgent(
+# universe,
+# subsystem_s_partition_dims=subsystem_s_internal_partition_dims,
+# subsystem_index_to_keep=0
+# )
 
-# New DataSources for Histogram and Bar Chart
-# For histogram of T values: top, left, right define the bars
-source_T_hist = ColumnDataSource(data=dict(top=[], left=[], right=[]))
-# For bar chart of F_structure stats by g_type
-# x_range for bar chart will be ['Type 0', 'Type 1']
-g_type_categories = [f"Type {i}" for i in range(2)] # Assuming g_type 0 and 1
-source_F_bars = ColumnDataSource(data=dict(g_types=g_type_categories, means=[0,0], counts=[0,0]))
+# REMOVED Data Sources for Bokeh plots
+# source_U = ColumnDataSource(data=dict(t=[], U=[]))
+# source_I = ColumnDataSource(data=dict(t=[], I=[]))
+# source_T_hist = ColumnDataSource(data=dict(top=[], left=[], right=[]))
+# g_type_categories = [f"Type {i}" for i in range(2)] 
+# source_F_bars = ColumnDataSource(data=dict(g_types=g_type_categories, means=[0,0], counts=[0,0]))
 
-# Bokeh Figures
-pU = figure(height=250, width=450, title="Universal Complexity U(t)", x_axis_label="Time Step", y_axis_label="U", output_backend="webgl")
-pU.line(x='t', y='U', source=source_U, line_width=2, legend_label="U")
-pU.legend.location = "top_left"
+# REMOVED Bokeh Figures
+# pU = figure(height=250, width=450, title="Universal Complexity U(t)", x_axis_label="Time Step", y_axis_label="U", output_backend="webgl")
+# pU.line(x='t', y='U', source=source_U, line_width=2, legend_label="U")
+# pU.legend.location = "top_left"
+# (and so on for pI, pT_hist, pF_bars)
 
-pI = figure(height=250, width=450, title="Integrated Information I(t)", x_axis_label="Time Step", y_axis_label="I", output_backend="webgl")
-pI.line(x='t', y='I', source=source_I, line_width=2, color=Category10[3][1], legend_label="I") # Using Bokeh palette
-pI.legend.location = "top_left"
-
-# New Figures for Histogram and Bar Chart
-pT_hist = figure(height=250, width=450, title="Distribution of T[g,φ] values", 
-                 x_axis_label="T value", y_axis_label="Frequency", output_backend="webgl")
-pT_hist.quad(top='top', bottom=0, left='left', right='right', source=source_T_hist, 
-             fill_color=Category10[3][2], line_color="white", alpha=0.7, legend_label="T Dist.")
-pT_hist.legend.location = "top_right"
-
-pF_bars = figure(height=250, width=450, title="F_structure: Mean T by g_type", 
-                 x_range=g_type_categories, y_axis_label="Mean T value", output_backend="webgl")
-pF_bars.vbar(x='g_types', top='means', source=source_F_bars, width=0.8,
-             legend_label="Mean T", color=factor_cmap('g_types', palette=Category10[3][:2], factors=g_type_categories))
-pF_bars.legend.location = "top_right"
-# Could add counts as text or a second y-axis later if desired
-
-# New Bokeh Elements for Chat Interface
-introduction_div = Div(text="<i>Agent Kairos initializing...</i>", width=910, height_policy="auto", style={'border': '1px solid black', 'padding': '5px', 'overflow-y': 'auto', 'height': '100px'})
-user_prompt_input = TextInput(value="", title="Ask Kairos:", width=790)
-send_button = Button(label="Send", button_type="success", width=100)
-pause_button = Button(label="Pause Simulation", button_type="warning", width=150)
-resume_button = Button(label="Resume Simulation", button_type="success", width=150, disabled=True)
-
-conversation_log_html = [] # Store HTML formatted log entries
+# REMOVED New Bokeh Elements for Chat Interface
+# introduction_div = Div(text="<i>Agent Kairos initializing...</i>", width=910, height_policy="auto", styles={'border': '1px solid black', 'padding': '5px', 'overflow-y': 'auto', 'height': '100px'})
+# user_prompt_input = TextInput(value="", title="Ask Kairos:", width=790)
+# send_button = Button(label="Send", button_type="success", width=100)
+# pause_button = Button(label="Pause Simulation", button_type="warning", width=150)
+# resume_button = Button(label="Resume Simulation", button_type="success", width=150, disabled=True)
+# conversation_log_html = [] 
 
 # --- Threading Setup ---
-simulation_queue = queue.Queue(maxsize=10) # Buffer for data packets
-pause_event = threading.Event()
-pause_event.set() # Start unpaused (event is clear, so not paused)
+# REMOVING Bokeh-specific threading elements. dashboard.py has its own.
+# simulation_queue = queue.Queue(maxsize=10) 
+# pause_event = threading.Event()
+# pause_event.set() 
 
 # --- Simulation Thread Worker (MODIFIED SIGNATURE) ---
-def simulation_thread_worker(simulation_queue, pause_event, target_tick_time):
-    global current_time_step, universe, field_space, op, integrator, agent, NUM_CONFIGS, simulation_params, INITIAL_SEED
-
-    # Setup for JSON Lines logging
-    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file_name = f"simulation_log_{timestamp_str}.jsonl"
-    print(f"[SimThread] Logging data to: {log_file_name}")
-
-    # Initialize field_space here for the first time
-    if field_space is None or field_space.num_configs != NUM_CONFIGS:
-        print(f"[SimThread] Initializing/Re-initializing FieldConfigurationSpace with NUM_CONFIGS = {NUM_CONFIGS}")
-        field_space = FieldConfigurationSpace(DIM, NUM_CONFIGS, universe.subsystem_dims_ket, seed=INITIAL_SEED + 1) # Use a modified seed
-
-    while True:
-        if not pause_event.is_set(): 
-            time.sleep(0.05) 
-            continue
-
-        loop_start_time = time.time()
-        current_time_step += 1
-
-        # Check if NUM_CONFIGS has changed and re-initialize field_space if needed
-        if field_space.num_configs != NUM_CONFIGS:
-            print(f"[SimThread] Re-initializing FieldConfigurationSpace: old_N={field_space.num_configs}, new_N={NUM_CONFIGS}")
-            field_space = FieldConfigurationSpace(DIM, NUM_CONFIGS, universe.subsystem_dims_ket, seed=INITIAL_SEED + current_time_step) # Vary seed on re-init
-
-        # 1. Perturb universe state using tunable amplitude
-        current_np_state = universe.state.full().flatten()
-        perturbation = simulation_params["PERTURBATION_AMPLITUDE"] * (np.random.randn(DIM) + 1j * np.random.randn(DIM))
-        perturbed_np_state = current_np_state + perturbation
-        perturbed_normalized_np = perturbed_np_state / np.linalg.norm(perturbed_np_state)
-        universe.state = Qobj(perturbed_normalized_np, dims=universe.subsystem_dims_ket)
-        
-        # 2. Re-evaluate agent's subsystem
-        agent.sub = Subsystem(universe, subsystem_index_to_keep=0)
-
-        # 3. Compute Universal Complexity U(t)
-        U_val = integrator.integrate(universe, field_space)
-
-        # 4. Agent introspection
-        agent.perform_introspection(U_val, current_time_step)
-        I_val = agent.current_I
-        C_val = agent.current_C
-
-        # 5. Compute F_structure 
-        category_C_objects = [CategoryObject(cfg['g_type'], cfg['phi']) for cfg in field_space.configs]
-        functor_F_instance = FunctorF(op, universe.state)
-        F_structure = compute_categorical_limit(functor_F_instance, category_C_objects)
-
-        data_packet_for_queue = {
-            "t": current_time_step,
-            "U": U_val,
-            "I": I_val,
-            "C": C_val, # C_val is often same as I_val in current setup
-            "F_structure_mean": F_structure['overall_mean'],
-            "F_structure_var": F_structure['overall_variance'],
-            "F_stats_g_type": F_structure['stats_by_g_type'],
-            "all_T_values": F_structure['all_T_values'] 
-        }
-        try:
-            simulation_queue.put_nowait(data_packet_for_queue) 
-        except queue.Full: # queue might not be imported here, but it's passed in
-            pass 
-
-        # Prepare data for logging (excluding potentially large 'all_T_values' from file log for now)
-        log_data = {
-            "t": current_time_step,
-            "U": U_val,
-            "I": I_val,
-            "C": C_val,
-            "F_overall_mean": F_structure['overall_mean'],
-            "F_overall_variance": F_structure['overall_variance'],
-            "F_stats_g_type": F_structure['stats_by_g_type'],
-            "NUM_CONFIGS": NUM_CONFIGS, # Log current NUM_CONFIGS
-            "PERTURBATION_AMPLITUDE": simulation_params["PERTURBATION_AMPLITUDE"] # Log current amplitude
-        }
-        try:
-            with open(log_file_name, 'a') as f_log:
-                f_log.write(json.dumps(log_data) + '\n')
-        except Exception as e:
-            print(f"[SimThread] Error writing to log file: {e}")
-
-        # Console output (can be made optional)
-        print(f"[SimThread t={current_time_step}] U={U_val:.4f}, I={I_val:.4f} (from consciousness.py worker)")
-
-        # Adjust sleep to aim for target_tick_time
-        elapsed_time = time.time() - loop_start_time
-        sleep_time = target_tick_time - elapsed_time
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+# REMOVING this worker function as dashboard.py has its own simulation_loop
+# def simulation_thread_worker(simulation_queue_param, pause_event_param, target_tick_time):
+#     global current_time_step_global, universe_global, field_space_global, op_global, integrator_global, agent_global, NUM_CONFIGS_global, simulation_params_global, INITIAL_SEED_global
+#     ... (entire function body) ...
 
 # --- Bokeh UI Update Callback (REMOVED ENTIRELY) ---
 
 # --- Bokeh Button Callbacks (REMOVED ENTIRELY) ---
 
 # --- Bokeh Document Setup (REMOVED ENTIRELY) ---
-
-# The following lines related to starting the thread or Bokeh document setup
-# should be removed as they are now handled in qualia.py
-
-# Example of how it might have looked and needs to be ensured it's gone:
-# doc = curdoc()
-# initial_intro_html = agent.introduce()
-# introduction_div.text = initial_intro_html
-# sim_thread = threading.Thread(target=simulation_thread_worker, daemon=True)
-# sim_thread.start()
-# doc.add_periodic_callback(update_ui_callback, 50) 
-# doc.title = "Conscious Agent Dashboard v0.3"
-# chat_controls = row(user_prompt_input, send_button)
-# sim_controls = row(pause_button, resume_button)
-# plot_row1 = row(pU, pT_hist)      
-# plot_row2 = row(pI, pF_bars)       
-# layout = column(introduction_div, chat_controls, sim_controls, plot_row1, plot_row2)
-# doc.add_root(layout)
+# (comments indicating Bokeh setup lines also removed)

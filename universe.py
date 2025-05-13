@@ -129,16 +129,28 @@ class UniverseState:
         Returns:
             qutip.Qobj: The reduced density matrix of the k-th subsystem.
         """
-        if not self.subsystem_dims_ket[0] or len(self.subsystem_dims_ket[0]) <= 1:
-            raise ValueError("Subsystem dims not defined or only one system; cannot ptrace.")
-        if k < 0 or k >= len(self.subsystem_dims_ket[0]):
-            raise ValueError(f"Subsystem index {k} out of bounds for {len(self.subsystem_dims_ket[0])} subsystems.")
+        # self.subsystem_dims_ket[0] holds the list of dimensions of tensor components, e.g., [dim_S, dim_E]
+        num_components = len(self.subsystem_dims_ket[0]) if self.subsystem_dims_ket and self.subsystem_dims_ket[0] else 0
 
-        rho_universe = self.get_density_matrix()
-        # rho_universe.dims is already set by get_density_matrix
+        if num_components == 0:
+            raise ValueError("UniverseState has no subsystem dimensions defined (subsystem_dims_ket[0] is empty or None).")
         
-        rho_S = rho_universe.ptrace(k)
-        return rho_S
+        if k < 0 or k >= num_components:
+            raise ValueError(f"Subsystem index {k} out of bounds for {num_components} defined subsystem(s).")
+
+        rho_universe = self.get_density_matrix() # This sets rho_universe.dims to self.subsystem_dims_dm
+
+        if num_components == 1:
+            # If there's only one component defined for the universe (e.g., dims are [[d1],[1]]),
+            # and k must be 0 (already checked by bounds), then the "subsystem" is the entire universe.
+            # No ptrace is needed or meaningful. rho_universe is already the state of this single component.
+            return rho_universe 
+        else:
+            # Multiple components, proceed with ptrace.
+            # rho_universe.dims is already set by get_density_matrix() to self.subsystem_dims_dm,
+            # which is in the correct format for ptrace (e.g., [[d1, d2], [d1, d2]]).
+            rho_S_traced = rho_universe.ptrace(k)
+            return rho_S_traced
 
 # Example usage (for testing or if run directly)
 if __name__ == '__main__':

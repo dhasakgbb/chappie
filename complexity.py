@@ -8,6 +8,8 @@ from qutip import Qobj
 # JAX setup for CPU, as default, to ensure consistency if GPU is available but not intended for use here.
 jax.config.update('jax_platform_name', 'cpu')
 
+_qutip_operator_cache = {} # Global cache for QuTiP S[g] operators
+
 # --- Define Symmetry Operators (as QuTiP Qobjs, converted to JAX matrices later) ---
 def get_qutip_symmetry_operator(g_type: int, dimension: int, phi_subsystem_dims: list[list[int]]) -> Qobj:
     """
@@ -78,7 +80,7 @@ _compute_batch_complexity_vmap = jax.vmap(
 
 def compute_universal_complexity_U(psi_qobj: Qobj, 
                                  field_configurations_list: list[dict], 
-                                 qutip_ops_cache: dict, # Passed down for S[g] caching
+                                 qutip_ops_cache: dict, # This argument is currently unused, get_qutip_symmetry_operator uses a global _qutip_operator_cache
                                  phi_subsystem_dims_for_S_operators: list[list[int]]) -> tuple[float, list[float], dict]:
     """
     Computes the Universal Complexity U(t) by averaging T[g,φ] values over all configurations.
@@ -88,7 +90,8 @@ def compute_universal_complexity_U(psi_qobj: Qobj,
         psi_qobj (Qobj): The universe state Ψ.
         field_configurations_list (list[dict]): A list of configurations from FieldConfigurationSpace.
                                               Each dict: {'g_type', 'phi_jax', 'phi_qobj'}.
-        qutip_ops_cache (dict): Cache to be used by get_qutip_symmetry_operator.
+        qutip_ops_cache (dict): Cache that *could* be used by get_qutip_symmetry_operator if passed down.
+                                Currently, get_qutip_symmetry_operator uses a global _qutip_operator_cache.
         phi_subsystem_dims_for_S_operators (list[list[int]]): 
             The QuTiP `dims` of the phi_qobj states, passed to S[g] operator generation.
 
@@ -104,27 +107,33 @@ def compute_universal_complexity_U(psi_qobj: Qobj,
     if not field_configurations_list:
         return 0.0, [], T_values_by_g_type
 
+    psi_jax = jnp.array(psi_qobj.full().flatten()) # Convert psi_qobj to JAX array once
+
     for config in field_configurations_list:
-        # compute_T_values_for_config_jax returns a list with a single T value
-        # This was to support an older design where one config could have multiple phis.
-        # Now, one config dict from FieldConfigurationSpace has one g_type and one phi.
-        T_val_list = compute_T_values_for_config_jax(
-            psi_qobj, config, qutip_ops_cache, phi_subsystem_dims_for_S_operators
+        g = config['g_type']
+        phi_jax_current = config['phi_jax'] # Already a JAX array
+        
+        # Get the QuTiP S[g] operator. 
+        # get_qutip_symmetry_operator uses the global _qutip_operator_cache.
+        # It needs the dimension of phi_qobj, not psi_qobj, if they can differ.
+        # Assuming phi_qobj from FieldConfigurationSpace has .dims and .shape[0] (dimension)
+        phi_qobj_current = config['phi_qobj']
+        s_g_qutip_op = get_qutip_symmetry_operator(g, phi_qobj_current.shape[0], phi_qobj_current.dims)
+        s_g_matrix_jax = jnp.array(s_g_qutip_op.full()) # Convert S[g] to JAX matrix
+
+        T_val = _compute_single_complexity_value_jax(
+            psi_jax, phi_jax_current, s_g_matrix_jax
         )
-        if T_val_list: # Should always contain one value if successful
-            T_val = T_val_list[0]
-            all_T_values.append(T_val)
-            g = config['g_type']
-            if g not in T_values_by_g_type:
-                T_values_by_g_type[g] = [] # Initialize if a new g_type appears
-            T_values_by_g_type[g].append(T_val)
+        
+        all_T_values.append(float(T_val)) # Store as Python float
+        if g not in T_values_by_g_type:
+            T_values_by_g_type[g] = []
+        T_values_by_g_type[g].append(float(T_val))
     
     if not all_T_values:
         U_val = 0.0
     else:
-        U_val = float(jnp.mean(jnp.array(all_T_values))) # Use JAX mean for consistency, on JAX array
-        # Or use np.mean(np.array(all_T_values)) if T_values are already Python floats
-        # U_val = float(np.mean(np.array(all_T_values))) # Switched to numpy.mean for list of floats
+        U_val = float(np.mean(np.array(all_T_values))) # Use numpy.mean for list of floats
 
     return U_val, all_T_values, T_values_by_g_type
 
