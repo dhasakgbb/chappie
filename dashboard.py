@@ -316,7 +316,7 @@ control_panel = pn.Column(
     sizing_mode='stretch_width'
 )
 plots_panel = pn.Column(plot_U_Phi_time_series, plot_T_histogram, plot_F_structure_bars, sizing_mode='stretch_width')
-dashboard_layout = pn.Column(pn.pane.Markdown("# Minimal Yet Powerful Consciousness Pipeline Dashboard"), control_panel, plots_panel, sizing_mode='stretch_width')
+dashboard_layout = pn.Column(pn.pane.Markdown("# Chappie Consciousness Pipeline Dashboard"), control_panel, plots_panel, sizing_mode='stretch_width')
 
 # --- Simulation Thread Management & Panel Server ---
 sim_thread = None # Initialize global sim_thread variable
