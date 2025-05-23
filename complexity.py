@@ -9,6 +9,7 @@ from qutip import Qobj
 jax.config.update('jax_platform_name', 'cpu')
 
 _jax_operator_cache = {} # Global cache for JAX S[g] operator matrices
+_cache_size_limit = 100  # Limit cache size to prevent memory issues
 
 # --- Define Symmetry Operators (as JAX matrices, derived from QuTiP Qobjs) ---
 def get_jax_symmetry_operator(g_type: int, dimension: int, phi_subsystem_dims: list[list[int]]) -> jnp.ndarray:
@@ -30,6 +31,10 @@ def get_jax_symmetry_operator(g_type: int, dimension: int, phi_subsystem_dims: l
     phi_subsystem_dims_tuple = tuple(tuple(inner_list) for inner_list in phi_subsystem_dims)
     cache_key = (g_type, dimension, phi_subsystem_dims_tuple)
     
+    # Clear cache if it gets too large to prevent memory issues
+    if len(_jax_operator_cache) > _cache_size_limit:
+        _jax_operator_cache.clear()
+    
     if cache_key in _jax_operator_cache:
         return _jax_operator_cache[cache_key]
 
@@ -37,18 +42,26 @@ def get_jax_symmetry_operator(g_type: int, dimension: int, phi_subsystem_dims: l
 
     if g_type == 0: # Identity operator S[0]
         s_matrix_np = np.eye(dimension, dtype=complex)
-    elif g_type == 1: # Permutation operator S[1] (e.g., swaps halves of the vector)
-        if dimension % 2 != 0:
-            print(f"Warning: Permutation S[1] expects even dimension, got {dimension}. Using identity.")
-            s_matrix_np = np.eye(dimension, dtype=complex)
-        else:
+    elif g_type == 1: # Permutation operator S[1] (quantum symmetry operation)
+        if dimension == 4 and len(phi_subsystem_dims[0]) == 2:
+            # For 2-qubit systems (4D), implement proper SWAP gate
+            # SWAP|00⟩ = |00⟩, SWAP|01⟩ = |10⟩, SWAP|10⟩ = |01⟩, SWAP|11⟩ = |11⟩
+            s_matrix_np = np.array([
+                [1, 0, 0, 0],  # |00⟩ → |00⟩
+                [0, 0, 1, 0],  # |01⟩ → |10⟩
+                [0, 1, 0, 0],  # |10⟩ → |01⟩
+                [0, 0, 0, 1]   # |11⟩ → |11⟩
+            ], dtype=complex)
+        elif dimension % 2 == 0:
+            # For other even dimensions, implement a cyclic permutation
             s_matrix_np = np.zeros((dimension, dimension), dtype=complex)
-            half_d = dimension // 2
-            # Example: Swaps first half with second half
-            for i in range(half_d):
-                s_matrix_np[i, half_d + i] = 1
-                s_matrix_np[half_d + i, i] = 1
-            # Could also implement other permutations based on g_type if expanded
+            for i in range(dimension):
+                s_matrix_np[i, (i + 1) % dimension] = 1
+        else:
+            # For odd dimensions, use a proper permutation matrix
+            s_matrix_np = np.zeros((dimension, dimension), dtype=complex)
+            for i in range(dimension):
+                s_matrix_np[i, (i + 1) % dimension] = 1
     else:
         raise ValueError(f"Unknown g_type: {g_type} for symmetry operator S[g]. Expected 0 or 1.")
     
@@ -66,16 +79,22 @@ def _compute_single_complexity_value_jax(psi_vector_jax: jnp.ndarray,
                                          phi_vector_jax: jnp.ndarray, 
                                          s_g_matrix_jax: jnp.ndarray) -> float:
     """
-    Computes T[g,φ] = |<Ψ|S[g]φ>|² for a single Ψ, φ, and S[g].
-    All inputs are JAX arrays. S[g] is its JAX matrix representation.
-    Assumes psi_vector_jax and (S[g] @ phi_vector_jax) are in the same space.
+    Computes T[g,φ] = <Ψ(t)|T[g,φ]|Ψ(t)> where T[g,φ] is the complexity operator.
+    
+    Mathematical correction: T[g,φ] should be an operator expectation value, not an inner product.
+    Following mission.txt: ComplexityValue(g, φ, t) = <Ψ(t)|T[g, φ]|Ψ(t)>
+    
+    Here we implement T[g,φ] = |φ><φ| ⊗ S[g] as a projective operator onto φ with symmetry g.
+    This gives T[g,φ] = |<Ψ|S[g]†|φ>|² which is the proper operator expectation form.
     """
-    # Ensure phi_vector_jax is a column vector for matmul: S[g] @ φ
-    effective_phi_vector_jax = s_g_matrix_jax @ phi_vector_jax.reshape(-1, 1)
-    effective_phi_vector_jax = effective_phi_vector_jax.flatten()
-
-    # Inner product: <Ψ|effective_φ> = Ψ† ⋅ effective_φ
-    projection_scalar_jax = jnp.vdot(psi_vector_jax, effective_phi_vector_jax)
+    # Apply symmetry operator: S[g]†|Ψ> (we want S[g]† because we're computing <Ψ|T[g,φ]|Ψ>)
+    s_g_dagger_matrix_jax = jnp.conj(s_g_matrix_jax.T)  # Hermitian conjugate
+    transformed_psi_jax = s_g_dagger_matrix_jax @ psi_vector_jax.reshape(-1, 1)
+    transformed_psi_jax = transformed_psi_jax.flatten()
+    
+    # Complexity operator T[g,φ] = |φ><φ| acting on transformed Ψ
+    # <Ψ|T[g,φ]|Ψ> = |<φ|S[g]†|Ψ>|²
+    projection_scalar_jax = jnp.vdot(phi_vector_jax, transformed_psi_jax)
     complexity_val = jnp.abs(projection_scalar_jax)**2
     return complexity_val
 
