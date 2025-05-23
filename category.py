@@ -1,406 +1,670 @@
-import networkx as nx
+#!/usr/bin/env python3
+"""
+Categorical Structure and Functor Analysis
+
+This module implements Step 6 of the consciousness creation framework:
+"Reflective Abstract Algebra - Category Theory Implementation"
+
+The CategoricalStructure class implements the functor F: C → Set that maps
+field configurations to complexity values, and computes categorical limits
+to discover universal structures underlying consciousness emergence.
+
+Mathematical Foundation:
+- Category C with objects as field configurations (g,φ)
+- Morphisms as symmetry transformations and field operations
+- Functor F: C → Set mapping objects to complexity values T[g,φ]
+- Categorical limit F(C) revealing universal consciousness structure
+
+Authors: Consciousness Research Team
+Version: 1.0.0
+License: MIT
+"""
+
+from typing import Dict, List, Tuple, Optional, Any, Union
 import numpy as np
-# from fields import FieldConfigurationSpace # If needed for explicit config types
-# from complexity import get_qutip_symmetry_operator # If needed to define actions
+import networkx as nx
+from dataclasses import dataclass
+
+
+@dataclass
+class CategoryObject:
+    """
+    Represents an object in category C (field configuration).
+    
+    Attributes:
+        node_id: Unique identifier for the object
+        g_type: Symmetry type (0=identity, 1=permutation)
+        complexity: Complexity value T[g,φ] (image under functor F)
+        phi_vector: Field configuration vector φ
+        stability: Measure of stability under morphisms
+    """
+    node_id: int
+    g_type: int
+    complexity: float
+    phi_vector: Optional[np.ndarray] = None
+    stability: Optional[float] = None
+
+
+@dataclass
+class CategoryMorphism:
+    """
+    Represents a morphism in category C.
+    
+    Attributes:
+        source: Source object ID
+        target: Target object ID
+        morphism_type: Type of transformation
+        transformation: Description of the transformation
+        weight: Strength/importance of the morphism
+    """
+    source: int
+    target: int
+    morphism_type: str
+    transformation: str
+    weight: float = 1.0
+
+
+@dataclass
+class CategoricalLimit:
+    """
+    Represents the categorical limit structure F(C).
+    
+    Attributes:
+        apex_object: The universal object at the apex of the limit cone
+        limit_cone: Collection of morphisms forming the cone
+        universal_properties: Properties that characterize universality
+        fixed_points: Stable configurations under functor F
+    """
+    apex_object: Optional[CategoryObject]
+    limit_cone: List[CategoryMorphism]
+    universal_properties: Dict[str, Any]
+    fixed_points: List[CategoryObject]
+
 
 class CategoricalStructure:
     """
-    Represents the categorical structure F: C -> Set (Step 6).
-    Enhanced implementation aligned with mission.txt requirements.
+    Implements categorical analysis of consciousness field configurations.
     
-    Objects in category C are field configurations (g, φ).
-    Morphisms represent symmetry operations and field transformations.
-    The functor F maps these objects to complexity values T[g,φ].
+    This class represents the category C where:
+    - Objects are field configurations (g,φ) 
+    - Morphisms are symmetry transformations
+    - Functor F maps objects to complexity values T[g,φ]
     
-    Mission Alignment: "Represent each local configuration as an object in category C.
-    Define a functor F mapping these objects to complexity values.
-    Compute inverse limit (or suitable limit) F(C) to find universal structure F."
+    The categorical limit F(C) reveals universal structures underlying
+    consciousness emergence through abstract algebraic analysis.
+    
+    Attributes:
+        graph: NetworkX directed graph representing the category
+        objects: Dictionary of category objects
+        morphisms: List of category morphisms
+        symmetry_groups: Grouping of objects by symmetry type
+        complexity_distribution: Distribution of complexity values
     """
-    def __init__(self, configurations: list[dict], complexity_values: list[float]):
+    
+    def __init__(self, 
+                 configurations: List[Dict[str, Any]], 
+                 complexity_values: List[float]) -> None:
         """
+        Initialize categorical structure from field configurations.
+        
         Args:
-            configurations (list[dict]): List of {'g_type': str, 'phi': np.ndarray}.
-                                         Each phi is a node.
-            complexity_values (list[float]): List of T[g,φ] values corresponding to each configuration.
-                                            These are the values F maps to.
+            configurations: List of field configuration dictionaries
+                          Each contains {'g_type': int, 'phi': np.ndarray}
+            complexity_values: Corresponding complexity values T[g,φ]
+            
+        Raises:
+            ValueError: If configurations and complexity values don't match
         """
-        if len(configurations) != len(complexity_values):
-            raise ValueError("Number of configurations must match number of complexity values.")
-
-        self.graph = nx.DiGraph() # Directed graph
+        self._validate_inputs(configurations, complexity_values)
+        
+        # Core categorical structure
+        self.graph = nx.DiGraph()
+        self.objects: Dict[int, CategoryObject] = {}
+        self.morphisms: List[CategoryMorphism] = []
+        
+        # Configuration data
         self.configurations = configurations
         self.complexity_values = complexity_values
-        self.node_to_config_idx = {}
         
-        # Enhanced categorical structure tracking
+        # Analytical structures
+        self.symmetry_groups: Dict[int, List[int]] = {}
+        self.complexity_distribution: Dict[float, int] = {}
         self.morphism_count = 0
-        self.symmetry_groups = {}
-        self.complexity_distribution = {}
-
-        self._build_enhanced_graph()
-
-    def _build_enhanced_graph(self):
+        
+        # Build categorical structure
+        self._build_category()
+    
+    def _validate_inputs(self, 
+                        configurations: List[Dict[str, Any]], 
+                        complexity_values: List[float]) -> None:
         """
-        Enhanced graph building with categorical structure tracking.
-        Implements proper functor F: C -> Set mapping.
-        """
-        for i, config in enumerate(self.configurations):
-            # Use index as node ID for simplicity, store actual config data as attributes
-            node_id = i 
-            self.node_to_config_idx[node_id] = i
+        Validate input parameters for categorical construction.
+        
+        Args:
+            configurations: Field configurations to validate
+            complexity_values: Complexity values to validate
             
-            # Enhanced node attributes for categorical analysis
-            complexity_val = self.complexity_values[i]
+        Raises:
+            ValueError: If inputs are invalid
+        """
+        if len(configurations) != len(complexity_values):
+            raise ValueError(
+                f"Number of configurations ({len(configurations)}) must match "
+                f"number of complexity values ({len(complexity_values)})"
+            )
+        
+        if not configurations:
+            raise ValueError("At least one configuration is required")
+        
+        # Validate configuration structure
+        for i, config in enumerate(configurations):
+            if not isinstance(config, dict):
+                raise ValueError(f"Configuration {i} must be a dictionary")
+            
+            if 'g_type' not in config:
+                raise ValueError(f"Configuration {i} missing 'g_type' field")
+            
+            if not isinstance(config['g_type'], (int, np.integer)) or config['g_type'] not in [0, 1]:
+                raise ValueError(f"Configuration {i} g_type must be 0 or 1")
+        
+        # Validate complexity values
+        if not all(isinstance(val, (int, float)) for val in complexity_values):
+            raise ValueError("All complexity values must be numeric")
+    
+    def _build_category(self) -> None:
+        """
+        Build the categorical structure from configurations.
+        
+        Creates objects, morphisms, and analyzes the functor F: C → Set
+        mapping field configurations to complexity values.
+        """
+        # Create category objects
+        self._create_objects()
+        
+        # Create morphisms between objects
+        self._create_morphisms()
+        
+        # Analyze symmetry structure
+        self._analyze_symmetry_groups()
+        
+        # Analyze complexity distribution
+        self._analyze_complexity_distribution()
+    
+    def _create_objects(self) -> None:
+        """Create category objects from field configurations."""
+        for i, (config, complexity) in enumerate(zip(self.configurations, self.complexity_values)):
+            # Extract configuration data
             g_type = config['g_type']
+            phi_vector = config.get('phi', None)
             
-            self.graph.add_node(node_id, 
-                                g_type=g_type, 
-                                complexity=complexity_val,
-                                functor_image=complexity_val,  # F(object) = complexity value
-                                symmetry_class=f"g_{g_type}")
+            # Create category object
+            obj = CategoryObject(
+                node_id=i,
+                g_type=g_type,
+                complexity=complexity,
+                phi_vector=phi_vector
+            )
             
-            # Track symmetry groups and complexity distribution
+            # Store object
+            self.objects[i] = obj
+            
+            # Add to graph with enhanced attributes
+            self.graph.add_node(
+                i,
+                g_type=g_type,
+                complexity=complexity,
+                functor_image=complexity,
+                symmetry_class=f"g_{g_type}",
+                object_type="field_configuration"
+            )
+    
+    def _create_morphisms(self) -> None:
+        """
+        Create morphisms representing transformations between objects.
+        
+        Morphisms encode the categorical structure of symmetry operations
+        and field transformations that preserve or relate complexity values.
+        """
+        # Intra-group morphisms (within same symmetry class)
+        self._create_intra_group_morphisms()
+        
+        # Inter-group morphisms (between different symmetry classes)
+        self._create_inter_group_morphisms()
+        
+        # Complexity-based morphisms
+        self._create_complexity_morphisms()
+    
+    def _create_intra_group_morphisms(self) -> None:
+        """Create morphisms within the same symmetry group."""
+        # Group objects by symmetry type
+        symmetry_groups = {}
+        for obj_id, obj in self.objects.items():
+            g_type = obj.g_type
+            if g_type not in symmetry_groups:
+                symmetry_groups[g_type] = []
+            symmetry_groups[g_type].append(obj_id)
+        
+        # Create morphisms within each group
+        for g_type, obj_ids in symmetry_groups.items():
+            for i, source_id in enumerate(obj_ids):
+                for j, target_id in enumerate(obj_ids):
+                    if i != j:
+                        # Calculate morphism weight based on complexity similarity
+                        source_complexity = self.objects[source_id].complexity
+                        target_complexity = self.objects[target_id].complexity
+                        weight = 1.0 / (1.0 + abs(source_complexity - target_complexity))
+                        
+                        # Create morphism
+                        morphism = CategoryMorphism(
+                            source=source_id,
+                            target=target_id,
+                            morphism_type=f"intra_symmetry_g{g_type}",
+                            transformation="symmetry_preserving",
+                            weight=weight
+                        )
+                        
+                        self.morphisms.append(morphism)
+                        self.graph.add_edge(
+                            source_id, target_id,
+                            morphism_type=morphism.morphism_type,
+                            transformation=morphism.transformation,
+                            weight=weight
+                        )
+                        self.morphism_count += 1
+    
+    def _create_inter_group_morphisms(self) -> None:
+        """Create morphisms between different symmetry groups."""
+        g_types = list(set(obj.g_type for obj in self.objects.values()))
+        
+        for g_type1 in g_types:
+            for g_type2 in g_types:
+                if g_type1 != g_type2:
+                    # Find representative objects from each group
+                    group1_objs = [obj_id for obj_id, obj in self.objects.items() if obj.g_type == g_type1]
+                    group2_objs = [obj_id for obj_id, obj in self.objects.items() if obj.g_type == g_type2]
+                    
+                    if group1_objs and group2_objs:
+                        # Create morphism between group representatives
+                        source_id = group1_objs[0]
+                        target_id = group2_objs[0]
+                        
+                        # Weight based on complexity relationship
+                        source_complexity = self.objects[source_id].complexity
+                        target_complexity = self.objects[target_id].complexity
+                        weight = 0.5 / (1.0 + abs(source_complexity - target_complexity))
+                        
+                        morphism = CategoryMorphism(
+                            source=source_id,
+                            target=target_id,
+                            morphism_type=f"inter_symmetry_g{g_type1}_g{g_type2}",
+                            transformation="symmetry_breaking",
+                            weight=weight
+                        )
+                        
+                        self.morphisms.append(morphism)
+                        self.graph.add_edge(
+                            source_id, target_id,
+                            morphism_type=morphism.morphism_type,
+                            transformation=morphism.transformation,
+                            weight=weight
+                        )
+                        self.morphism_count += 1
+    
+    def _create_complexity_morphisms(self) -> None:
+        """Create morphisms based on complexity value relationships."""
+        # Sort objects by complexity
+        sorted_objects = sorted(self.objects.items(), key=lambda x: x[1].complexity)
+        
+        # Create morphisms between objects with similar complexity
+        complexity_threshold = 0.1
+        
+        for i, (obj_id1, obj1) in enumerate(sorted_objects):
+            for j, (obj_id2, obj2) in enumerate(sorted_objects[i+1:], i+1):
+                complexity_diff = abs(obj1.complexity - obj2.complexity)
+                
+                if complexity_diff < complexity_threshold:
+                    weight = 1.0 - (complexity_diff / complexity_threshold)
+                    
+                    morphism = CategoryMorphism(
+                        source=obj_id1,
+                        target=obj_id2,
+                        morphism_type="complexity_similarity",
+                        transformation="complexity_preserving",
+                        weight=weight
+                    )
+                    
+                    self.morphisms.append(morphism)
+                    self.graph.add_edge(
+                        obj_id1, obj_id2,
+                        morphism_type=morphism.morphism_type,
+                        transformation=morphism.transformation,
+                        weight=weight
+                    )
+                    self.morphism_count += 1
+    
+    def _analyze_symmetry_groups(self) -> None:
+        """Analyze symmetry group structure of the category."""
+        for obj_id, obj in self.objects.items():
+            g_type = obj.g_type
             if g_type not in self.symmetry_groups:
                 self.symmetry_groups[g_type] = []
-            self.symmetry_groups[g_type].append(node_id)
-            
+            self.symmetry_groups[g_type].append(obj_id)
+    
+    def _analyze_complexity_distribution(self) -> None:
+        """Analyze distribution of complexity values across the category."""
+        for obj in self.objects.values():
             # Discretize complexity for distribution analysis
-            complexity_bin = round(complexity_val, 2)
+            complexity_bin = round(obj.complexity, 2)
             if complexity_bin not in self.complexity_distribution:
                 self.complexity_distribution[complexity_bin] = 0
             self.complexity_distribution[complexity_bin] += 1
-        
-        # Add morphisms based on symmetry relationships
-        self._add_symmetry_morphisms()
-
-    def _add_symmetry_morphisms(self):
+    
+    def compute_categorical_limit(self) -> CategoricalLimit:
         """
-        Add morphisms representing symmetry transformations between configurations.
-        Enhanced implementation of categorical morphisms.
-        """
-        # Add morphisms within symmetry groups (identity-like transformations)
-        for g_type, node_list in self.symmetry_groups.items():
-            for i, node1 in enumerate(node_list):
-                for j, node2 in enumerate(node_list):
-                    if i != j:
-                        # Morphism representing transformation within same symmetry class
-                        self.graph.add_edge(node1, node2, 
-                                          morphism_type=f"symmetry_g{g_type}",
-                                          transformation="intra_group")
-                        self.morphism_count += 1
+        Compute the categorical limit F(C) of the functor F: C → Set.
         
-        # Add morphisms between different symmetry groups
-        for g_type1, nodes1 in self.symmetry_groups.items():
-            for g_type2, nodes2 in self.symmetry_groups.items():
-                if g_type1 != g_type2:
-                    # Sample morphism between groups
-                    if nodes1 and nodes2:
-                        self.graph.add_edge(nodes1[0], nodes2[0],
-                                          morphism_type=f"inter_g{g_type1}_g{g_type2}",
-                                          transformation="inter_group")
-                        self.morphism_count += 1
-
-    def compute_F_structure_enhanced(self) -> dict:
-        """
-        Enhanced computation of the categorical limit F_structure.
+        This implements the core categorical analysis to find universal
+        structures underlying consciousness emergence.
         
-        Mission Alignment: "Compute inverse limit (or suitable limit) F(C) to find universal structure F"
-        
-        This implements a sophisticated approximation to the categorical limit
-        by analyzing the functor F's behavior across the category structure.
+        Returns:
+            CategoricalLimit object containing the limit structure
         """
-        if not self.configurations:
-            return {"name": "F_structure_enhanced", "type": "empty_category", 
-                    "categorical_limit": None, "universal_structure": None}
-
-        # 1. Analyze functor F's fixed points and stable structures
+        # Find fixed points of the functor F
         fixed_points = self._find_functor_fixed_points()
         
-        # 2. Compute limit cone over F(C)
+        # Compute limit cone structure
         limit_cone = self._compute_limit_cone()
         
-        # 3. Analyze universal property emergence
+        # Find apex object (universal object)
+        apex_object = self._find_apex_object(fixed_points)
+        
+        # Analyze universal properties
         universal_properties = self._analyze_universal_properties()
         
-        # 4. Category-theoretic invariants
-        categorical_invariants = self._compute_categorical_invariants()
+        return CategoricalLimit(
+            apex_object=apex_object,
+            limit_cone=limit_cone,
+            universal_properties=universal_properties,
+            fixed_points=fixed_points
+        )
+    
+    def _find_functor_fixed_points(self) -> List[CategoryObject]:
+        """
+        Find fixed points of functor F where F(x) exhibits stability.
         
-        # 5. Enhanced F-structure representing the categorical limit
-        f_structure_enhanced = {
-            "name": "F_structure_categorical_limit",
-            "type": "enhanced_categorical_analysis",
-            
-            # Core categorical limit structure
-            "categorical_limit": {
-                "fixed_points": fixed_points,
-                "limit_cone": limit_cone,
-                "universal_properties": universal_properties
-            },
-            
-            # Universal structure emergence
-            "universal_structure": {
-                "symmetry_groups": len(self.symmetry_groups),
-                "morphism_density": self.morphism_count / max(1, len(self.configurations)**2),
-                "complexity_coherence": self._measure_complexity_coherence(),
-                "categorical_dimension": self._estimate_categorical_dimension()
-            },
-            
-            # Mathematical invariants
-            "categorical_invariants": categorical_invariants,
-            
-            # Complexity distribution over the category
-            "complexity_landscape": {
-                "distribution": dict(self.complexity_distribution),
-                "symmetry_complexity_map": self._map_symmetry_to_complexity(),
-                "functor_image_statistics": self._analyze_functor_image()
-            },
-            
-            # Graph-theoretic properties
-            "graph_properties": {
-                "num_objects": self.graph.number_of_nodes(),
-                "num_morphisms": self.graph.number_of_edges(),
-                "connected_components": nx.number_weakly_connected_components(self.graph),
-                "clustering_coefficient": nx.average_clustering(self.graph.to_undirected()) if self.graph.number_of_nodes() > 0 else 0
-            }
-        }
-        
-        return f_structure_enhanced
-
-    def _find_functor_fixed_points(self) -> list:
-        """Find configurations where F exhibits stable behavior (fixed points)"""
+        Returns:
+            List of objects that are stable under the functor
+        """
         fixed_points = []
         
-        for node_id, node_data in self.graph.nodes(data=True):
-            complexity = node_data['complexity']
+        for obj_id, obj in self.objects.items():
+            # Calculate stability based on morphism structure
+            stability = self._calculate_object_stability(obj_id)
             
-            # A configuration is a "fixed point" if its complexity is stable
-            # under morphisms (represented by similar complexity in connected nodes)
-            connected_complexities = []
-            for neighbor in self.graph.neighbors(node_id):
-                neighbor_complexity = self.graph.nodes[neighbor]['complexity']
-                connected_complexities.append(neighbor_complexity)
+            # Update object with stability measure
+            obj.stability = stability
             
-            if connected_complexities:
-                stability = 1.0 - np.std(connected_complexities) / (np.mean(connected_complexities) + 1e-6)
-                if stability > 0.8:  # High stability threshold
-                    fixed_points.append({
-                        'node_id': node_id,
-                        'complexity': complexity,
-                        'g_type': node_data['g_type'],
-                        'stability': stability
-                    })
+            # Consider object a fixed point if highly stable
+            if stability > 0.7:  # High stability threshold
+                fixed_points.append(obj)
         
         return fixed_points
-
-    def _compute_limit_cone(self) -> dict:
-        """
-        Compute approximation to the categorical limit cone over F(C).
-        
-        In category theory, a limit cone consists of:
-        1. An apex object
-        2. Projection morphisms to each object in the diagram  
-        3. Universal property: unique factorization through the apex
-        
-        This computes an approximation by finding the "most universal" complexity value.
-        """
-        all_complexities = [data['complexity'] for _, data in self.graph.nodes(data=True)]
-        
-        if not all_complexities:
-            return {"apex": 0, "projections": [], "coherence": 0, "universality": 0}
-        
-        # Find the complexity value that minimizes variance to all others
-        # This approximates the "universal" object in the categorical sense
-        min_variance = float('inf')
-        best_apex = 0
-        
-        for candidate_apex in all_complexities:
-            variance = np.var([abs(candidate_apex - comp) for comp in all_complexities])
-            if variance < min_variance:
-                min_variance = variance
-                best_apex = candidate_apex
-        
-        # Projections from apex to each object (categorical morphisms)
-        projections = [abs(best_apex - comp) for comp in all_complexities]
-        
-        # Coherence: how well the universal property holds
-        # (lower projection variance = better universal property)
-        coherence = 1.0 / (1.0 + np.std(projections)) if projections else 0.0
-        
-        # Universality measure: how many objects are "close" to the apex
-        close_threshold = np.std(all_complexities) * 0.5 if len(all_complexities) > 1 else 0.1
-        universal_count = sum(1 for proj in projections if proj <= close_threshold)
-        universality = universal_count / len(projections) if projections else 0.0
-        
-        return {
-            "apex": best_apex,
-            "projections": projections,
-            "coherence": coherence,
-            "universality": universality,
-            "projection_variance": np.var(projections) if projections else 0.0
-        }
-
-    def _analyze_universal_properties(self) -> dict:
-        """Analyze emergence of universal properties in the categorical structure"""
-        properties = {}
-        
-        # Universal property: uniqueness of morphisms to/from certain objects
-        if self.graph.number_of_nodes() > 0:
-            in_degrees = dict(self.graph.in_degree())
-            out_degrees = dict(self.graph.out_degree())
-            
-            # Find "universal" objects (high connectivity)
-            max_in_degree = max(in_degrees.values()) if in_degrees else 0
-            max_out_degree = max(out_degrees.values()) if out_degrees else 0
-            
-            universal_objects = []
-            for node_id in self.graph.nodes():
-                if (in_degrees.get(node_id, 0) > 0.7 * max_in_degree or 
-                    out_degrees.get(node_id, 0) > 0.7 * max_out_degree):
-                    universal_objects.append(node_id)
-            
-            properties["universal_objects"] = universal_objects
-            properties["universality_measure"] = len(universal_objects) / max(1, self.graph.number_of_nodes())
-        
-        return properties
-
-    def _compute_categorical_invariants(self) -> dict:
-        """Compute category-theoretic invariants"""
-        invariants = {}
-        
-        if self.graph.number_of_nodes() > 0:
-            # Euler characteristic approximation
-            V = self.graph.number_of_nodes()  # Objects
-            E = self.graph.number_of_edges()  # Morphisms
-            invariants["euler_characteristic"] = V - E
-            
-            # Homology-like measures
-            cycles = list(nx.simple_cycles(self.graph))
-            invariants["cycle_count"] = len(cycles)
-            invariants["acyclicity"] = len(cycles) == 0
-            
-            # Categorical dimension (rough approximation)
-            invariants["categorical_dimension"] = self._estimate_categorical_dimension()
-        
-        return invariants
-
-    def _estimate_categorical_dimension(self) -> int:
-        """Estimate the 'dimension' of the category based on morphism chains"""
-        if self.graph.number_of_nodes() == 0:
-            return 0
-            
-        # Approximate dimension as the longest path length
-        try:
-            longest_path = max(nx.dag_longest_path_length(self.graph) 
-                             if nx.is_directed_acyclic_graph(self.graph) else 1,
-                             1)
-        except:
-            longest_path = 1
-            
-        return min(longest_path, 5)  # Cap at reasonable dimension
-
-    def _measure_complexity_coherence(self) -> float:
-        """Measure how coherently complexity is distributed across symmetry groups"""
-        if not self.symmetry_groups:
-            return 0.0
-            
-        group_complexities = {}
-        for g_type, nodes in self.symmetry_groups.items():
-            complexities = [self.graph.nodes[node]['complexity'] for node in nodes]
-            if complexities:
-                group_complexities[g_type] = np.mean(complexities)
-        
-        if len(group_complexities) < 2:
-            return 1.0
-            
-        # Coherence is inversely related to variance between groups
-        group_means = list(group_complexities.values())
-        coherence = 1.0 / (1.0 + np.var(group_means))
-        return coherence
-
-    def _map_symmetry_to_complexity(self) -> dict:
-        """Map each symmetry type to its characteristic complexity"""
-        symmetry_complexity_map = {}
-        
-        for g_type, nodes in self.symmetry_groups.items():
-            complexities = [self.graph.nodes[node]['complexity'] for node in nodes]
-            if complexities:
-                symmetry_complexity_map[f"g_type_{g_type}"] = {
-                    "mean": np.mean(complexities),
-                    "std": np.std(complexities),
-                    "count": len(complexities)
-                }
-        
-        return symmetry_complexity_map
-
-    def _analyze_functor_image(self) -> dict:
-        """Analyze the image of functor F: C -> Set"""
-        all_complexities = [data['complexity'] for _, data in self.graph.nodes(data=True)]
-        
-        if not all_complexities:
-            return {"range": 0, "density": 0, "coverage": 0}
-        
-        return {
-            "range": max(all_complexities) - min(all_complexities),
-            "mean": np.mean(all_complexities),
-            "density": len(set(np.round(all_complexities, 3))) / len(all_complexities),
-            "coverage": len(set(np.round(all_complexities, 2))),
-            "entropy": -sum(p * np.log(p + 1e-10) for p in np.histogram(all_complexities, bins=10)[0]/len(all_complexities) if p > 0)
-        }
-
-    # Keep the original method for backward compatibility
-    def compute_F_structure_proxy(self) -> dict:
-        """Original method - now delegates to enhanced version"""
-        enhanced_result = self.compute_F_structure_enhanced()
-        
-        # Extract compatible format for backward compatibility
-        simplified_result = {
-            "name": "F_structure_proxy_v3_enhanced",
-            "type": "enhanced_categorical_with_legacy_compat",
-            "overall_mean_complexity": enhanced_result["complexity_landscape"]["functor_image_statistics"]["mean"],
-            "overall_variance_complexity": enhanced_result["complexity_landscape"]["functor_image_statistics"].get("variance", 0),
-            "stats_by_g_type": enhanced_result["complexity_landscape"]["symmetry_complexity_map"],
-            "num_graph_nodes": enhanced_result["graph_properties"]["num_objects"],
-            "num_graph_edges": enhanced_result["graph_properties"]["num_morphisms"],
-            "num_weakly_connected_components": enhanced_result["graph_properties"]["connected_components"],
-            "categorical_limit_info": enhanced_result["categorical_limit"],
-            "universal_structure_measures": enhanced_result["universal_structure"]
-        }
-        
-        return simplified_result
-
-# Example Usage:
-if __name__ == '__main__':
-    # Sample data (mimicking output from other modules)
-    sample_configs = [
-        {'g_type': "identity", 'phi': np.array([1,0,0,0], dtype=complex)}, 
-        {'g_type': "half_swap", 'phi': np.array([0,0,1,0], dtype=complex)},
-        {'g_type': "identity", 'phi': np.array([0,1,0,0], dtype=complex)},
-        {'g_type': "phase_flip_S1", 'phi': np.array([1,0,0,0], dtype=complex)*1j},
-        {'g_type': "half_swap", 'phi': np.array([0,0,0,1], dtype=complex)}
-    ]
-    # Corresponding T[g,φ] values (these would come from complexity.py)
-    sample_T_values = [0.8, 0.5, 0.7, 0.9, 0.4]
-
-    cat_struct = CategoricalStructure(configurations=sample_configs, complexity_values=sample_T_values)
     
-    # At this point, graph has nodes but no edges from add_morphism_edges (it's a placeholder)
-    print(f"Graph has {cat_struct.graph.number_of_nodes()} nodes and {cat_struct.graph.number_of_edges()} edges.")
+    def _calculate_object_stability(self, obj_id: int) -> float:
+        """
+        Calculate stability of an object under morphisms.
+        
+        Args:
+            obj_id: ID of object to analyze
+            
+        Returns:
+            Stability measure between 0 and 1
+        """
+        obj_complexity = self.objects[obj_id].complexity
+        
+        # Get complexities of connected objects
+        connected_complexities = []
+        for neighbor in self.graph.neighbors(obj_id):
+            neighbor_complexity = self.objects[neighbor].complexity
+            connected_complexities.append(neighbor_complexity)
+        
+        if not connected_complexities:
+            return 1.0  # Isolated objects are maximally stable
+        
+        # Calculate stability as inverse of complexity variance
+        mean_complexity = np.mean(connected_complexities)
+        std_complexity = np.std(connected_complexities)
+        
+        if std_complexity < 1e-10:
+            return 1.0  # Perfect stability
+        
+        stability = 1.0 / (1.0 + std_complexity / (abs(mean_complexity) + 1e-6))
+        return min(stability, 1.0)
+    
+    def _compute_limit_cone(self) -> List[CategoryMorphism]:
+        """
+        Compute the limit cone structure over F(C).
+        
+        Returns:
+            List of morphisms forming the limit cone
+        """
+        # Find the most central object as potential apex
+        centrality = nx.degree_centrality(self.graph)
+        if not centrality:
+            return []
+        
+        apex_candidate = max(centrality, key=centrality.get)
+        
+        # Create cone morphisms from apex to all other objects
+        cone_morphisms = []
+        for obj_id in self.objects:
+            if obj_id != apex_candidate:
+                morphism = CategoryMorphism(
+                    source=apex_candidate,
+                    target=obj_id,
+                    morphism_type="limit_cone_projection",
+                    transformation="universal_projection",
+                    weight=centrality[apex_candidate]
+                )
+                cone_morphisms.append(morphism)
+        
+        return cone_morphisms
+    
+    def _find_apex_object(self, fixed_points: List[CategoryObject]) -> Optional[CategoryObject]:
+        """
+        Find the apex object of the categorical limit.
+        
+        Args:
+            fixed_points: List of fixed point objects
+            
+        Returns:
+            The apex object, or None if not found
+        """
+        if not fixed_points:
+            return None
+        
+        # Choose the fixed point with highest stability and centrality
+        best_score = -1
+        apex_object = None
+        
+        for obj in fixed_points:
+            centrality = nx.degree_centrality(self.graph).get(obj.node_id, 0)
+            score = obj.stability * centrality
+            
+            if score > best_score:
+                best_score = score
+                apex_object = obj
+        
+        return apex_object
+    
+    def _analyze_universal_properties(self) -> Dict[str, Any]:
+        """
+        Analyze universal properties of the categorical structure.
+        
+        Returns:
+            Dictionary of universal properties
+        """
+        return {
+            "symmetry_groups": len(self.symmetry_groups),
+            "morphism_density": self.morphism_count / max(1, len(self.objects)**2),
+            "complexity_coherence": self._measure_complexity_coherence(),
+            "categorical_dimension": self._estimate_categorical_dimension(),
+            "connectivity": nx.is_weakly_connected(self.graph),
+            "clustering_coefficient": nx.average_clustering(self.graph.to_undirected()) if self.graph.number_of_nodes() > 0 else 0,
+            "diameter": nx.diameter(self.graph) if nx.is_weakly_connected(self.graph) else float('inf')
+        }
+    
+    def _measure_complexity_coherence(self) -> float:
+        """
+        Measure coherence of complexity values across the category.
+        
+        Returns:
+            Coherence measure between 0 and 1
+        """
+        if len(self.complexity_values) < 2:
+            return 1.0
+        
+        # Calculate coefficient of variation
+        mean_complexity = np.mean(self.complexity_values)
+        std_complexity = np.std(self.complexity_values)
+        
+        if mean_complexity < 1e-10:
+            return 1.0
+        
+        cv = std_complexity / mean_complexity
+        coherence = 1.0 / (1.0 + cv)
+        
+        return coherence
+    
+    def _estimate_categorical_dimension(self) -> int:
+        """
+        Estimate the categorical dimension of the structure.
+        
+        Returns:
+            Estimated dimension
+        """
+        # Use number of symmetry groups as a proxy for dimension
+        return len(self.symmetry_groups)
+    
+    def get_functor_analysis(self) -> Dict[str, Any]:
+        """
+        Get comprehensive analysis of the functor F: C → Set.
+        
+        Returns:
+            Dictionary containing functor analysis results
+        """
+        categorical_limit = self.compute_categorical_limit()
+        
+        return {
+            "functor_name": "F: C → Set",
+            "domain_category": {
+                "objects": len(self.objects),
+                "morphisms": len(self.morphisms),
+                "symmetry_groups": self.symmetry_groups
+            },
+            "codomain_set": {
+                "complexity_values": self.complexity_values,
+                "value_range": (min(self.complexity_values), max(self.complexity_values)),
+                "distribution": dict(self.complexity_distribution)
+            },
+            "categorical_limit": {
+                "apex_object": categorical_limit.apex_object,
+                "fixed_points": len(categorical_limit.fixed_points),
+                "limit_cone_size": len(categorical_limit.limit_cone),
+                "universal_properties": categorical_limit.universal_properties
+            },
+            "graph_properties": {
+                "nodes": self.graph.number_of_nodes(),
+                "edges": self.graph.number_of_edges(),
+                "connected_components": nx.number_weakly_connected_components(self.graph),
+                "is_connected": nx.is_weakly_connected(self.graph)
+            }
+        }
+    
+    def __repr__(self) -> str:
+        """String representation of categorical structure."""
+        return (
+            f"CategoricalStructure(objects={len(self.objects)}, "
+            f"morphisms={len(self.morphisms)}, "
+            f"symmetry_groups={len(self.symmetry_groups)})"
+        )
+    
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        return (
+            f"Category C with Functor F: C → Set\n"
+            f"Objects: {len(self.objects)} field configurations\n"
+            f"Morphisms: {len(self.morphisms)} transformations\n"
+            f"Symmetry groups: {len(self.symmetry_groups)}\n"
+            f"Complexity range: [{min(self.complexity_values):.3f}, {max(self.complexity_values):.3f}]"
+        )
 
-    f_structure_result = cat_struct.compute_F_structure_proxy()
-    print("\nF_structure Proxy Results:")
-    for key, value in f_structure_result.items():
-        if key == "stats_by_g_type":
-            print(f"  {key}:")
-            for g, stats in value.items():
-                print(f"    {g}: {stats}")
+
+# Example usage and testing
+if __name__ == '__main__':
+    print("🔗 Categorical Structure Analysis - Consciousness Framework")
+    print("=" * 65)
+    
+    # Create sample field configurations for testing
+    np.random.seed(42)
+    num_configs = 20
+    
+    configurations = []
+    complexity_values = []
+    
+    for i in range(num_configs):
+        g_type = np.random.choice([0, 1])
+        phi_vector = np.random.randn(4) + 1j * np.random.randn(4)
+        phi_vector = phi_vector / np.linalg.norm(phi_vector)
+        
+        config = {
+            'g_type': g_type,
+            'phi': phi_vector
+        }
+        
+        # Generate complexity value with some structure
+        complexity = 0.5 + 0.3 * g_type + 0.2 * np.random.randn()
+        complexity = max(0, complexity)  # Ensure non-negative
+        
+        configurations.append(config)
+        complexity_values.append(complexity)
+    
+    print(f"Created {num_configs} field configurations")
+    print(f"Complexity range: [{min(complexity_values):.3f}, {max(complexity_values):.3f}]")
+    print()
+    
+    # Create categorical structure
+    print("Building categorical structure...")
+    categorical_structure = CategoricalStructure(configurations, complexity_values)
+    
+    print("Categorical Structure:")
+    print(categorical_structure)
+    print()
+    
+    # Compute categorical limit
+    print("Computing categorical limit F(C)...")
+    categorical_limit = categorical_structure.compute_categorical_limit()
+    
+    print(f"Fixed points found: {len(categorical_limit.fixed_points)}")
+    print(f"Limit cone size: {len(categorical_limit.limit_cone)}")
+    
+    if categorical_limit.apex_object:
+        apex = categorical_limit.apex_object
+        print(f"Apex object: node_{apex.node_id} (g_type={apex.g_type}, "
+              f"complexity={apex.complexity:.3f}, stability={apex.stability:.3f})")
+    print()
+    
+    # Get comprehensive functor analysis
+    print("Functor F: C → Set Analysis:")
+    functor_analysis = categorical_structure.get_functor_analysis()
+    
+    for key, value in functor_analysis.items():
+        if isinstance(value, dict):
+            print(f"{key}:")
+            for subkey, subvalue in value.items():
+                print(f"  {subkey}: {subvalue}")
         else:
-            print(f"  {key}: {value}")
-
-    # To make it more interesting, one would need a proper `s_operator_func` and `phi_subsystem_dims`
-    # to call `cat_struct.add_morphism_edges(...)` if that method was fully implemented.
-    # For example, if using get_qutip_symmetry_operator from complexity.py:
-    # from complexity import get_qutip_symmetry_operator, PHI_SUBSYSTEM_DIMS_EXAMPLE # (assuming it's defined)
-    # cat_struct.add_morphism_edges(get_qutip_symmetry_operator) # This would need phi_subsystem_dims too.
-    # f_structure_result_with_edges = cat_struct.compute_F_structure_proxy()
-    # print("\nF_structure Proxy Results (after attempting to add edges):")
-    # ... (print again) 
+            print(f"{key}: {value}")
+    print()
+    
+    print("✓ Categorical structure analysis complete") 

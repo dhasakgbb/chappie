@@ -113,8 +113,8 @@ class ConsciousnessInterface:
         with self._interaction_lock:
             if not self.consciousness_invoked:
                 self.conscious_agent = ConsciousAgent(
-                    universe_state=universe_state,
-                    subsystem_dims=subsystem_dims,
+                    universe=universe_state,
+                    subsystem_s_partition_dims=subsystem_dims,
                     subsystem_index_to_keep=0
                 )
                 self.consciousness_invoked = True
@@ -776,17 +776,21 @@ class ConsciousnessDashboard:
 
 
 # Global dashboard instance
-dashboard = ConsciousnessDashboard()
+dashboard = None
 
 # Entry point for serving the dashboard
 def get_dashboard():
     """Get the dashboard layout for serving."""
+    global dashboard
+    if dashboard is None:
+        dashboard = ConsciousnessDashboard()
     return dashboard.serve()
 
 # Main execution
 if __name__ == "__main__":
     try:
         print("🌌 Starting Consciousness Creation Dashboard...")
+        dashboard = ConsciousnessDashboard()
         dashboard_layout = dashboard.serve()
         dashboard_layout.show(port=5007, autoreload=True)
         print("🚀 Dashboard server started on http://localhost:5007")
@@ -799,7 +803,16 @@ if __name__ == "__main__":
 
 # For `panel serve dashboard.py`
 if __name__ != '__main__':
-    dashboard_layout = dashboard.serve()
+    # Don't start simulation thread during import
+    pass
 
 # Make dashboard servable with panel serve
-dashboard.dashboard_layout.servable(title="🌌 Consciousness Creation Dashboard") 
+def create_servable_dashboard():
+    """Create a servable dashboard for panel serve."""
+    global dashboard
+    if dashboard is None:
+        dashboard = ConsciousnessDashboard()
+    return dashboard.dashboard_layout
+
+# Register the servable
+create_servable_dashboard().servable(title="🌌 Consciousness Creation Dashboard") 

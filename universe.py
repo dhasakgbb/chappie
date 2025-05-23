@@ -1,227 +1,425 @@
-import qutip
+#!/usr/bin/env python3
+"""
+Quantum Universe State Management
+
+This module implements the quantum universe state Ψ(t) as specified in Step 1 
+of the consciousness creation framework. It provides a robust interface for 
+managing quantum states in Hilbert space with proper tensor product structure.
+
+The UniverseState class serves as the fundamental quantum substrate upon which
+consciousness emerges through the integration of complexity theory and 
+integrated information theory.
+
+Authors: Consciousness Research Team
+Version: 1.0.0
+License: MIT
+"""
+
+from typing import List, Optional, Union
 import numpy as np
+import qutip
+from qutip import Qobj, ket2dm
+
 
 class UniverseState:
     """
     Manages the quantum state of the universe using QuTiP.
-    Corresponds to Step 1: Represent Universe State Ψ(t).
-    Minimal Toolkit: QuTiP (Qobj, mesolve/sesolve for dynamics).
+    
+    This class implements Step 1 of the consciousness creation framework:
+    "Represent Universe State Ψ(t) in Hilbert space H"
+    
+    The universe state serves as the quantum substrate for consciousness
+    emergence, maintaining proper tensor product structure for subsystem
+    analysis and integrated information calculations.
+    
+    Attributes:
+        dimension: Total dimension of the Hilbert space
+        subsystem_dims_ket: Tensor product dimensions for ket states
+        subsystem_dims_dm: Tensor product dimensions for density matrices
+        state: Current quantum state |Ψ(t)⟩
     """
-    def __init__(self, dimension: int, initial_state_seed: int = None, subsystem_dims: list[int] = None):
+    
+    def __init__(self, 
+                 dimension: int, 
+                 initial_state_seed: Optional[int] = None, 
+                 subsystem_dims: Optional[List[int]] = None) -> None:
         """
-        Initializes Ψ(t) in Hilbert space H.
+        Initialize the quantum universe state Ψ(t) in Hilbert space H.
 
         Args:
-            dimension (int): Total dimension of the Hilbert space.
-            initial_state_seed (int, optional): Seed for random state generation. Defaults to None.
-            subsystem_dims (list[int], optional): 
-                Dimensions for tensor product structure, e.g., [dim_S, dim_E]. 
-                This is crucial for defining the state's dims attribute for QuTiP operations
-                like ptrace. If dimension is a product of subsystem_dims, these will be used.
-                The ket dims will be [[d1, d2, ...], [1, 1, ...]].
+            dimension: Total dimension of the Hilbert space
+            initial_state_seed: Seed for reproducible random state generation
+            subsystem_dims: Dimensions for tensor product structure [dim_S, dim_E, ...]
+                          Essential for consciousness subsystem analysis
+                          
+        Raises:
+            ValueError: If subsystem dimensions don't match total dimension
+            TypeError: If parameters have incorrect types
         """
+        if not isinstance(dimension, int) or dimension <= 0:
+            raise TypeError("Dimension must be a positive integer")
+            
         self.dimension = dimension
         self.initial_state_seed = initial_state_seed
-
+        
+        # Configure tensor product structure
+        self._setup_subsystem_dimensions(subsystem_dims)
+        
+        # Initialize quantum state
+        self.state: Qobj = self._prepare_initial_state()
+        
+        # Validation
+        self._validate_state_consistency()
+    
+    def _setup_subsystem_dimensions(self, subsystem_dims: Optional[List[int]]) -> None:
+        """
+        Configure tensor product dimensions for quantum state structure.
+        
+        Args:
+            subsystem_dims: List of subsystem dimensions
+            
+        Raises:
+            ValueError: If subsystem dimensions are inconsistent
+        """
         if subsystem_dims:
-            if np.prod(subsystem_dims) != dimension:
+            if not all(isinstance(d, int) and d > 0 for d in subsystem_dims):
+                raise ValueError("All subsystem dimensions must be positive integers")
+                
+            if np.prod(subsystem_dims) != self.dimension:
                 raise ValueError(
-                    f"Product of subsystem_dims {subsystem_dims} must equal dimension {dimension}"
+                    f"Product of subsystem_dims {subsystem_dims} "
+                    f"must equal total dimension {self.dimension}"
                 )
+            
+            # QuTiP tensor product structure: [bra_dims, ket_dims]
             self.subsystem_dims_ket = [subsystem_dims, [1] * len(subsystem_dims)]
             self.subsystem_dims_dm = [subsystem_dims, subsystem_dims]
         else:
-            # If no subsystem_dims, treat as a single system
-            self.subsystem_dims_ket = [[dimension], [1]]
-            self.subsystem_dims_dm = [[dimension], [dimension]]
-            
-        self.state: qutip.Qobj = self._prepare_initial_state()
-
-    def _prepare_initial_state(self) -> qutip.Qobj:
+            # Single system (no tensor product structure)
+            self.subsystem_dims_ket = [[self.dimension], [1]]
+            self.subsystem_dims_dm = [[self.dimension], [self.dimension]]
+    
+    def _prepare_initial_state(self) -> Qobj:
         """
-        Prepares an initial random normalized ket state.
+        Prepare initial normalized quantum state |Ψ(0)⟩.
+        
+        Creates a random complex vector in Hilbert space, properly normalized
+        and configured with correct tensor product dimensions.
+        
+        Returns:
+            Initial quantum state as QuTiP Qobj
         """
         if self.initial_state_seed is not None:
             np.random.seed(self.initial_state_seed)
         
-        # Create a random complex vector
+        # Generate random complex vector
         vec_real = np.random.randn(self.dimension)
         vec_imag = np.random.randn(self.dimension)
         vec = vec_real + 1j * vec_imag
+        
+        # Normalize to unit vector
         normalized_vec = vec / np.linalg.norm(vec)
         
-        initial_ket = qutip.Qobj(normalized_vec, dims=self.subsystem_dims_ket)
+        # Create QuTiP quantum state with proper dimensions
+        initial_ket = Qobj(normalized_vec, dims=self.subsystem_dims_ket)
+        
         return initial_ket
-
-    def get_state(self) -> qutip.Qobj:
-        """Returns the current quantum state Ψ(t)."""
-        return self.state
-
-    def set_state(self, new_state: qutip.Qobj):
+    
+    def _validate_state_consistency(self) -> None:
         """
-        Sets the current quantum state. Ensures new_state has compatible dims.
+        Validate quantum state consistency and properties.
+        
+        Raises:
+            ValueError: If state properties are inconsistent
         """
-        if not isinstance(new_state, qutip.Qobj):
-            raise TypeError("New state must be a QuTiP Qobj.")
-        if new_state.shape[0] != self.dimension or not new_state.isket:
+        if not self.state.isket:
+            raise ValueError("Universe state must be a ket vector")
+            
+        if not np.isclose(self.state.norm(), 1.0, atol=1e-10):
+            raise ValueError(f"State norm {self.state.norm()} must be 1.0")
+            
+        if self.state.shape[0] != self.dimension:
             raise ValueError(
-                f"New state must be a ket of dimension {self.dimension}, got shape {new_state.shape}"
+                f"State dimension {self.state.shape[0]} "
+                f"must match universe dimension {self.dimension}"
             )
-        # It's also good practice to ensure the dims attribute matches
-        new_state.dims = self.subsystem_dims_ket
-        self.state = new_state
-
-    def perturb_state(self, amplitude: float, seed: int = None):
+    
+    def get_state(self) -> Qobj:
         """
-        Applies a random perturbation to the current state and re-normalizes.
-        This is a simple evolution mechanism for now.
+        Get the current quantum state Ψ(t).
+        
+        Returns:
+            Current quantum state as QuTiP Qobj
+        """
+        return self.state
+    
+    def set_state(self, new_state: Qobj) -> None:
+        """
+        Set new quantum state with validation.
         
         Args:
-            amplitude (float): Strength of the perturbation.
-            seed (int, optional): Seed for this specific perturbation.
+            new_state: New quantum state to set
+            
+        Raises:
+            TypeError: If new_state is not a QuTiP Qobj
+            ValueError: If new_state has incompatible properties
         """
+        if not isinstance(new_state, Qobj):
+            raise TypeError("New state must be a QuTiP Qobj")
+            
+        if new_state.shape[0] != self.dimension or not new_state.isket:
+            raise ValueError(
+                f"New state must be a ket of dimension {self.dimension}, "
+                f"got shape {new_state.shape}"
+            )
+        
+        # Ensure proper tensor product dimensions
+        new_state.dims = self.subsystem_dims_ket
+        self.state = new_state
+        
+        # Validate consistency
+        self._validate_state_consistency()
+    
+    def perturb_state(self, amplitude: float, seed: Optional[int] = None) -> None:
+        """
+        Apply quantum perturbation to evolve the universe state.
+        
+        This implements a simple evolution mechanism that adds random
+        perturbations while maintaining normalization. More sophisticated
+        evolution can use evolve_step_unitary() for Hamiltonian dynamics.
+        
+        Args:
+            amplitude: Strength of the perturbation (0.0 to 1.0 recommended)
+            seed: Random seed for reproducible perturbations
+            
+        Raises:
+            ValueError: If amplitude is negative
+        """
+        if amplitude < 0:
+            raise ValueError("Perturbation amplitude must be non-negative")
+            
         if seed is not None:
             np.random.seed(seed)
 
-        current_np_state = self.state.full().flatten() # Get as NumPy array
-        perturbation_np = amplitude * (
+        # Get current state as numpy array
+        current_state = self.state.full().flatten()
+        
+        # Generate random perturbation
+        perturbation = amplitude * (
             np.random.randn(self.dimension) + 1j * np.random.randn(self.dimension)
         )
-        perturbed_np_state = current_np_state + perturbation_np
         
-        # Normalize
-        norm = np.linalg.norm(perturbed_np_state)
-        if norm < 1e-9: # Avoid division by zero if state collapses to zero
-            print("Warning: Perturbed state norm is close to zero. Re-initializing to random state.")
-            self.state = self._prepare_initial_state() # Fallback
+        # Apply perturbation
+        perturbed_state = current_state + perturbation
+        
+        # Normalize and handle edge cases
+        norm = np.linalg.norm(perturbed_state)
+        if norm < 1e-12:  # Avoid numerical instability
+            print("⚠️  Warning: Perturbed state norm near zero. Re-initializing.")
+            self.state = self._prepare_initial_state()
         else:
-            perturbed_normalized_np = perturbed_np_state / norm
-            self.state = qutip.Qobj(perturbed_normalized_np, dims=self.subsystem_dims_ket)
-
-    def evolve_step_unitary(self, H_operator: qutip.Qobj, dt: float):
+            normalized_state = perturbed_state / norm
+            self.state = Qobj(normalized_state, dims=self.subsystem_dims_ket)
+    
+    def evolve_step_unitary(self, hamiltonian: Qobj, dt: float) -> None:
         """
-        Evolves the state by one step under a unitary evolution: U = exp(-i H dt).
-        Requires H_operator to be a Qobj.
-        (Placeholder for sesolve/mesolve if complex dynamics are needed)
-        """
-        if not isinstance(H_operator, qutip.Qobj) or not H_operator.isoper:
-            raise ValueError("H_operator must be a QuTiP operator Qobj.")
+        Evolve state under unitary dynamics: |Ψ(t+dt)⟩ = U(dt)|Ψ(t)⟩.
         
-        # Simple unitary evolution U = (-1j * H_operator * dt).expm()
-        # This is a basic implementation. For more complex time-dependent H or Lindblad, use qutip.sesolve or qutip.mesolve
-        U = (-1j * H_operator * dt).expm()
-        self.state = (U * self.state).unit() # Apply and re-normalize
-
-    def get_density_matrix(self) -> qutip.Qobj:
-        """Returns the density matrix ρ(t) = |Ψ(t)><Ψ(t)|."""
-        dm = qutip.ket2dm(self.state)
-        dm.dims = self.subsystem_dims_dm # Ensure correct tensor product dims
-        return dm
-
-    def get_subsystem_density_matrix(self, k: int) -> qutip.Qobj:
-        """
-        Computes the reduced density matrix for the k-th subsystem by tracing out others.
-        Requires self.state.dims to be set correctly for a tensor product structure.
+        Implements time evolution under Hamiltonian H:
+        U(dt) = exp(-i H dt / ℏ) (setting ℏ = 1)
         
         Args:
-            k (int): The index of the subsystem to keep (0-indexed).
+            hamiltonian: Hamiltonian operator as QuTiP Qobj
+            dt: Time step for evolution
+            
+        Raises:
+            TypeError: If hamiltonian is not a QuTiP operator
+            ValueError: If hamiltonian has incompatible dimensions
+        """
+        if not isinstance(hamiltonian, Qobj) or not hamiltonian.isoper:
+            raise TypeError("Hamiltonian must be a QuTiP operator Qobj")
+            
+        if hamiltonian.shape[0] != self.dimension:
+            raise ValueError(
+                f"Hamiltonian dimension {hamiltonian.shape[0]} "
+                f"must match universe dimension {self.dimension}"
+            )
+        
+        # Compute unitary evolution operator
+        try:
+            evolution_operator = (-1j * hamiltonian * dt).expm()
+            self.state = (evolution_operator * self.state).unit()
+        except Exception as e:
+            raise RuntimeError(f"Failed to compute unitary evolution: {e}")
+    
+    def get_density_matrix(self) -> Qobj:
+        """
+        Compute density matrix ρ(t) = |Ψ(t)⟩⟨Ψ(t)|.
         
         Returns:
-            qutip.Qobj: The reduced density matrix of the k-th subsystem.
+            Density matrix as QuTiP Qobj with proper tensor dimensions
         """
-        # self.subsystem_dims_ket[0] holds the list of dimensions of tensor components, e.g., [dim_S, dim_E]
-        num_components = len(self.subsystem_dims_ket[0]) if self.subsystem_dims_ket and self.subsystem_dims_ket[0] else 0
-
-        if num_components == 0:
-            raise ValueError("UniverseState has no subsystem dimensions defined (subsystem_dims_ket[0] is empty or None).")
+        density_matrix = ket2dm(self.state)
+        density_matrix.dims = self.subsystem_dims_dm
+        return density_matrix
+    
+    def get_subsystem_density_matrix(self, subsystem_index: int) -> Qobj:
+        """
+        Compute reduced density matrix for specified subsystem.
         
-        if k < 0 or k >= num_components:
-            raise ValueError(f"Subsystem index {k} out of bounds for {num_components} defined subsystem(s).")
-
-        rho_universe = self.get_density_matrix() # This sets rho_universe.dims to self.subsystem_dims_dm
-
-        if num_components == 1:
-            # If there's only one component defined for the universe (e.g., dims are [[d1],[1]]),
-            # and k must be 0 (already checked by bounds), then the "subsystem" is the entire universe.
-            # No ptrace is needed or meaningful. rho_universe is already the state of this single component.
-            return rho_universe 
+        This is essential for consciousness analysis, as it provides
+        the quantum state of subsystem S needed for integrated
+        information calculations.
+        
+        Args:
+            subsystem_index: Index of subsystem to extract (0-indexed)
+            
+        Returns:
+            Reduced density matrix of the specified subsystem
+            
+        Raises:
+            ValueError: If subsystem index is out of bounds
+            RuntimeError: If partial trace computation fails
+        """
+        num_subsystems = len(self.subsystem_dims_ket[0]) if self.subsystem_dims_ket[0] else 0
+        
+        if num_subsystems == 0:
+            raise ValueError("No subsystem dimensions defined")
+            
+        if not (0 <= subsystem_index < num_subsystems):
+            raise ValueError(
+                f"Subsystem index {subsystem_index} out of bounds "
+                f"for {num_subsystems} subsystems"
+            )
+        
+        # Get full density matrix
+        full_density_matrix = self.get_density_matrix()
+        
+        if num_subsystems == 1:
+            # Single subsystem case - return full density matrix
+            return full_density_matrix
         else:
-            # Multiple components, proceed with ptrace.
-            # rho_universe.dims is already set by get_density_matrix() to self.subsystem_dims_dm,
-            # which is in the correct format for ptrace (e.g., [[d1, d2], [d1, d2]]).
-            rho_S_traced = rho_universe.ptrace(k)
-            return rho_S_traced
+            # Multiple subsystems - compute partial trace
+            try:
+                reduced_density_matrix = full_density_matrix.ptrace(subsystem_index)
+                return reduced_density_matrix
+            except Exception as e:
+                raise RuntimeError(f"Failed to compute partial trace: {e}")
+    
+    def get_entanglement_entropy(self, subsystem_index: int) -> float:
+        """
+        Compute von Neumann entropy of subsystem (entanglement measure).
+        
+        S(ρ_S) = -Tr(ρ_S log ρ_S)
+        
+        Args:
+            subsystem_index: Index of subsystem to analyze
+            
+        Returns:
+            Von Neumann entropy of the subsystem
+        """
+        rho_subsystem = self.get_subsystem_density_matrix(subsystem_index)
+        return qutip.entropy_vn(rho_subsystem)
+    
+    def get_purity(self, subsystem_index: Optional[int] = None) -> float:
+        """
+        Compute purity of system or subsystem.
+        
+        Purity = Tr(ρ²), ranges from 1/d (maximally mixed) to 1 (pure)
+        
+        Args:
+            subsystem_index: If None, compute for full system; 
+                           otherwise for specified subsystem
+                           
+        Returns:
+            Purity value between 0 and 1
+        """
+        if subsystem_index is None:
+            rho = self.get_density_matrix()
+        else:
+            rho = self.get_subsystem_density_matrix(subsystem_index)
+            
+        return float((rho * rho).tr().real)
+    
+    def __repr__(self) -> str:
+        """String representation of universe state."""
+        return (
+            f"UniverseState(dimension={self.dimension}, "
+            f"subsystems={len(self.subsystem_dims_ket[0]) if self.subsystem_dims_ket[0] else 0}, "
+            f"norm={self.state.norm():.6f})"
+        )
+    
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        subsystem_info = (
+            f"Subsystem dims: {self.subsystem_dims_ket[0]}" 
+            if self.subsystem_dims_ket[0] else "No subsystems"
+        )
+        return (
+            f"Quantum Universe State Ψ(t)\n"
+            f"Total dimension: {self.dimension}\n"
+            f"{subsystem_info}\n"
+            f"State norm: {self.state.norm():.6f}\n"
+            f"Is pure state: {self.state.isket}"
+        )
 
-# Example usage (for testing or if run directly)
+
+def create_consciousness_universe(subsystem_dim: int = 4, 
+                                environment_dim: int = 1,
+                                seed: Optional[int] = None) -> UniverseState:
+    """
+    Factory function to create universe optimized for consciousness studies.
+    
+    Creates a universe with a consciousness subsystem S and environment E,
+    configured for integrated information theory calculations.
+    
+    Args:
+        subsystem_dim: Dimension of consciousness subsystem S
+        environment_dim: Dimension of environment E  
+        seed: Random seed for reproducible initialization
+        
+    Returns:
+        Configured UniverseState for consciousness research
+    """
+    total_dim = subsystem_dim * environment_dim
+    subsystem_dims = [subsystem_dim, environment_dim] if environment_dim > 1 else [subsystem_dim]
+    
+    return UniverseState(
+        dimension=total_dim,
+        initial_state_seed=seed,
+        subsystem_dims=subsystem_dims
+    )
+
+
+# Example usage and testing
 if __name__ == '__main__':
-    # Example: A 2-qubit system (S) and a 2-level environment (E)
-    # Total dimension = 2 * 2 * 2 = 8
-    # Subsystem S is composed of two qubits [S1, S2] with dims [2,2]
-    # Environment E has dim [2]
-    # For UniverseState, subsystem_dims should represent the top-level tensor structure,
-    # e.g., H_S x H_E. So, dim_S = 2*2 = 4.
-    dim_S1 = 2
-    dim_S2 = 2
-    dim_S_total = dim_S1 * dim_S2 # Dimension of the main subsystem we might be interested in
-    dim_E = 2 # Dimension of an "environment"
+    print("🌌 Quantum Universe State - Consciousness Framework")
+    print("=" * 60)
     
-    total_dim = dim_S_total * dim_E # Total dimension for the universe state
-
-    # UniverseState sees H_S_total and H_E as its primary tensor components
-    uni_state = UniverseState(dimension=total_dim, 
-                              initial_state_seed=42, 
-                              subsystem_dims=[dim_S_total, dim_E])
+    # Create consciousness-optimized universe
+    universe = create_consciousness_universe(
+        subsystem_dim=4,  # 2x2 qubit subsystem for consciousness
+        environment_dim=1,  # Single environment level
+        seed=42
+    )
     
-    print("Initial Universe State Ψ(t):")
-    print(uni_state.get_state())
-    print(f"State dimensions: {uni_state.get_state().dims}")
-    print(f"Is ket: {uni_state.get_state().isket}")
-    print(f"Norm: {uni_state.get_state().norm()}")
-
-    uni_state.perturb_state(amplitude=0.1, seed=101)
-    print("\nPerturbed Universe State Ψ(t):")
-    print(uni_state.get_state())
-    print(f"Norm after perturbation: {uni_state.get_state().norm()}")
-
-    # Get density matrix of the first subsystem (dim_S_total)
-    rho_S_total = uni_state.get_subsystem_density_matrix(0)
-    print("\nReduced Density Matrix for S_total (ptrace over E):")
-    print(rho_S_total)
-    print(f"rho_S_total dimensions: {rho_S_total.dims}")
-    print(f"rho_S_total trace: {rho_S_total.tr()}")
-
-    # If S_total itself is a tensor product, e.g., S1 x S2, and we want rho_S1 from rho_S_total
-    # We need to ensure rho_S_total has the correct internal dims for further ptrace
-    # rho_S_total currently has dims [[dim_S_total], [dim_S_total]] from the perspective of the ptrace
-    # To trace out S2 from S_total = S1 x S2, we need rho_S_total to have dims [[dim_S1, dim_S2], [dim_S1, dim_S2]]
+    print(f"Initial Universe State:")
+    print(universe)
+    print()
     
-    # This part demonstrates further processing if needed, but UniverseState focuses on Ψ(t)
-    # and its top-level subsystems. The new 'consciousness.py' will handle detailed subsystem IIT.
-    if dim_S_total == dim_S1 * dim_S2:
-        rho_S_total_internal_dims = [[dim_S1, dim_S2], [dim_S1, dim_S2]]
-        rho_S_total.dims = rho_S_total_internal_dims # Re-assign dims for internal structure of S_total
-        
-        rho_S1 = rho_S_total.ptrace(0) # Trace out S2 to get S1
-        print("\nReduced Density Matrix for S1 (ptrace over S2 from rho_S_total):")
-        print(rho_S1)
-        print(f"rho_S1 dimensions: {rho_S1.dims}")
-        print(f"rho_S1 trace: {rho_S1.tr()}")
-        
-    # Example of unitary evolution (simple Hamiltonian: SigmaZ on first part of S_total, identity on rest)
-    # Assuming S_total is the first system in universe's [dim_S_total, dim_E] structure.
-    # H_S_total component: e.g. sigmaz() on S1, identity on S2 (if S_total = S1 x S2)
-    # If dim_S_total = 4, dim_S1=2, dim_S2=2:
-    if dim_S_total == 4 and dim_S1 == 2 and dim_S2 == 2 :
-        H_S1_local = qutip.sigmaz()
-        H_S_total_internal = qutip.tensor(H_S1_local, qutip.qeye(dim_S2))
-        
-        # Full Hamiltonian for the universe: H_S_total_internal on S_total, Identity on E
-        H_universe = qutip.tensor(H_S_total_internal, qutip.qeye(dim_E))
-        H_universe.dims = uni_state.subsystem_dims_dm # Operator dims [[dStot,dE],[dStot,dE]]
-        
-        print("\nApplying simple unitary evolution...")
-        print(f"Hamiltonian H_universe dims: {H_universe.dims}")
-        uni_state.evolve_step_unitary(H_universe, dt=0.1)
-        print("State after evolution:")
-        print(uni_state.get_state())
-        print(f"Norm: {uni_state.get_state().norm()}") 
+    # Demonstrate quantum evolution
+    print("Applying quantum perturbation...")
+    universe.perturb_state(amplitude=0.1, seed=101)
+    print(f"State norm after perturbation: {universe.get_state().norm():.6f}")
+    print()
+    
+    # Analyze subsystem properties
+    print("Consciousness Subsystem Analysis:")
+    rho_S = universe.get_subsystem_density_matrix(0)
+    print(f"Subsystem density matrix shape: {rho_S.shape}")
+    print(f"Subsystem trace: {rho_S.tr():.6f}")
+    print(f"Subsystem purity: {universe.get_purity(0):.6f}")
+    print(f"Entanglement entropy: {universe.get_entanglement_entropy(0):.6f}")
+    print()
+    
+    print("✓ Universe state validation complete") 
