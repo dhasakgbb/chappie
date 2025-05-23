@@ -27,6 +27,31 @@ from datetime import datetime
 # Assuming universe.py is in the same directory or accessible in PYTHONPATH
 from universe import UniverseState 
 
+# --- Monkeypatch for pyphi.Subsystem __repr__ ---
+# Attempt to fix TypeError: __repr__ returned non-string (type int)
+# This should be applied if manually editing pyphi/subsystem.py doesn't work or isn't feasible.
+_original_pyphi_subsystem_repr = None
+if hasattr(pyphi.subsystem, 'Subsystem'):
+    _original_pyphi_subsystem_repr = pyphi.subsystem.Subsystem.__repr__
+    def _patched_subsystem_repr(self):
+        try:
+            # Original logic from pyphi.subsystem.Subsystem.__repr__ but with str()
+            # instead of repr() for the nodes to avoid the TypeError.
+            return "Subsystem(" + ", ".join(map(str, self.nodes)) + ")"
+        except Exception as e:
+            # Fallback to original if patching causes issues, or a simple representation
+            if _original_pyphi_subsystem_repr:
+                try:
+                    return _original_pyphi_subsystem_repr(self) # Call original
+                except Exception as e_orig:
+                    return f"<Subsystem object (error in original repr: {e_orig})>"
+            return f"<Subsystem object (error in patched repr: {e})>"
+    pyphi.subsystem.Subsystem.__repr__ = _patched_subsystem_repr
+    print("INFO: Monkeypatched pyphi.Subsystem.__repr__ to use str() for nodes.")
+else:
+    print("WARNING: Could not monkeypatch pyphi.Subsystem.__repr__: pyphi.subsystem.Subsystem not found as expected.")
+# --- End Monkeypatch ---
+
 class FieldConfigurationSpace:
     """Defines a space of field configurations using QuTiP Qobjs."""
     def __init__(self, dimension: int, num_configs: int, subsystem_dims_ket: list[list[int]], seed: int = None):

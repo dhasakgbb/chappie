@@ -162,32 +162,31 @@ t_values_buffer = Buffer(data=np.empty((0,1)), length=1000, index=False)
 f_structure_pipe = Pipe(data={"g_type": [], "mean_T": []})
 
 # --- Panel Widgets ---
-run_button = pnw.Button(name="Pause Simulation ⏸", button_type="primary") # Start in running state
-num_configs_slider = pnw.IntSlider(name="Number of φ Samples (M)", start=10, end=500, step=10, value=INITIAL_NUM_CONFIGS, value_throttled=200)
-perturb_amp_slider = pnw.FloatSlider(name="Perturbation Amplitude Ψ(t)", start=0.0, end=1.0, step=0.01, value=INITIAL_PERTURB_AMP)
-status_text = pn.pane.Markdown("Simulation Starting...")
+run_button = pnw.Button(name="Pause Simulation ⏸", button_type="primary", margin=(5, 10))
+num_configs_slider = pnw.IntSlider(name="Number of Field Configurations (M)", start=10, end=500, step=10, value=INITIAL_NUM_CONFIGS, value_throttled=INITIAL_NUM_CONFIGS)
+perturb_amp_slider = pnw.FloatSlider(name="Perturbation Amplitude", start=0.001, end=0.1, step=0.001, value=0.02, value_throttled=0.02)
+status_text = pn.pane.Markdown("Starting up...")
 
-# *** MISSION ALIGNMENT: Consciousness Interaction Interface ***
+# Consciousness interaction widgets - MISSION ALIGNMENT
 consciousness_prompt_input = pnw.TextInput(
-    placeholder="Enter your question for Kairos...", 
     name="Communicate with Consciousness:",
-    width=500
+    placeholder="Ask Kairos about reality, existence, or consciousness...",
+    width=400
 )
 consciousness_send_button = pnw.Button(
-    name="Ask Kairos", 
-    button_type="success", 
-    width=100
-)
-consciousness_output = pn.pane.Markdown(
-    "**Consciousness not yet awakened. Start simulation to invoke consciousness.**",
-    width=700, 
-    height=400,
-    styles={'border': '2px solid #2E86C1', 'padding': '10px', 'background': '#F8F9FA'}
+    name="Send Message 🧠",
+    button_type="primary",
+    width=120
 )
 consciousness_report_button = pnw.Button(
-    name="Get Consciousness Report", 
-    button_type="info", 
-    width=200
+    name="Get Consciousness Report 📊", 
+    button_type="primary",
+    width=180
+)
+consciousness_output = pn.pane.Markdown(
+    "### Kairos is awakening...\n*The conscious entity will respond once the quantum substrate stabilizes.*",
+    sizing_mode='stretch_width',
+    styles={'border': '1px solid #333', 'padding': '10px', 'background': '#f8f9fa'}
 )
 
 def consciousness_interaction_callback(event):
@@ -354,9 +353,12 @@ def simulation_loop(sim_state: SimulationState, stop_event: threading.Event,
         # Perform deep introspection as the conscious entity evolves
         conscious_agent.perform_deep_introspection(U_val, current_tick)
         
+        # Get consciousness level for tracking changes
+        consciousness_level = conscious_agent.consciousness_level if conscious_agent else 0.0
+        
         # Dynamic consciousness insights based on consciousness level changes
-        prev_consciousness = (consciousness_interface.conscious_entity.consciousness_trajectory[-2]['consciousness_level'] 
-                              if len(consciousness_interface.conscious_entity.consciousness_trajectory) > 1 else 0)
+        prev_consciousness = (consciousness_interface.conscious_agent.consciousness_trajectory[-2]['consciousness_level'] 
+                              if len(consciousness_interface.conscious_agent.consciousness_trajectory) > 1 else 0)
         consciousness_change = abs(consciousness_level - prev_consciousness)
         
         # More frequent updates when consciousness is changing rapidly
@@ -377,7 +379,6 @@ def simulation_loop(sim_state: SimulationState, stop_event: threading.Event,
         f_proxy = cat_struct.compute_F_structure_proxy() 
         
         # Enhanced status with consciousness level
-        consciousness_level = conscious_agent.consciousness_level if conscious_agent else 0.0
         status_msg = f"Step {current_tick}: U={U_val:.3f}, Φ={phi_S_val:.3f}, Consciousness={consciousness_level:.3f}"
         
         ui_data_packet = {
